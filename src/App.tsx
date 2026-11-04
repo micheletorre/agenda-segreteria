@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Printer, 
   Plus, 
@@ -8,7 +8,9 @@ import {
   Clock, 
   Search,
   Edit2,
-  Trash2
+  Trash2,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import type { Appointment, DailyNote } from './types';
 import { INITIAL_APPOINTMENTS, INITIAL_DAILY_NOTES } from './initialData';
@@ -20,17 +22,25 @@ import {
   parseISODate,
   toISODate 
 } from './utils/dateUtils';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { AppointmentModal } from './components/AppointmentModal';
 import { DailyNoteModal } from './components/DailyNoteModal';
 
 export default function App() {
-  // Data e Appuntamenti
-  const [appointments, setAppointments] = useState<Appointment[]>(INITIAL_APPOINTMENTS);
-  const [dailyNotes, setDailyNotes] = useState<DailyNote[]>(INITIAL_DAILY_NOTES);
+  // Data e Appuntamenti (con fallback localStorage)
+  const [appointments, setAppointments] = useState<Appointment[]>(() => {
+    const saved = localStorage.getItem('agenda_appointments');
+    return saved ? JSON.parse(saved) : INITIAL_APPOINTMENTS;
+  });
+
+  const [dailyNotes, setDailyNotes] = useState<DailyNote[]>(() => {
+    const saved = localStorage.getItem('agenda_daily_notes');
+    return saved ? JSON.parse(saved) : INITIAL_DAILY_NOTES;
+  });
+
   const [lastUpdateDate, setLastUpdateDate] = useState<Date>(new Date(2026, 10, 3, 18, 30));
 
   // Visualizzazione e navigazione
-  // Impostiamo di base il 4 novembre 2026 come nella foto
   const [startDateStr, setStartDateStr] = useState<string>('2026-11-04');
   const [daysCount, setDaysCount] = useState<number>(14); // 14 giorni predefiniti per 2 pagine A4 fronte/retro
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -42,6 +52,53 @@ export default function App() {
 
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<DailyNote | null>(null);
+
+  // Caricamento e Realtime con Supabase
+  useEffect(() => {
+    const client = supabase;
+    if (!isSupabaseConfigured || !client) return;
+
+    const fetchSupabaseData = async () => {
+      const { data: appsData } = await client.from('appointments').select('*').order('date', { ascending: true });
+      if (appsData && appsData.length > 0) {
+        setAppointments(appsData);
+        localStorage.setItem('agenda_appointments', JSON.stringify(appsData));
+      }
+
+      const { data: notesData } = await client.from('daily_notes').select('*').order('start_date', { ascending: true });
+      if (notesData && notesData.length > 0) {
+        setDailyNotes(notesData);
+        localStorage.setItem('agenda_daily_notes', JSON.stringify(notesData));
+      }
+      setLastUpdateDate(new Date());
+    };
+
+    fetchSupabaseData();
+
+    // Sottoscrizione Realtime
+    const channel = client
+      .channel('agenda-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
+        fetchSupabaseData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_notes' }, () => {
+        fetchSupabaseData();
+      })
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, []);
+
+  // Salva su LocalStorage se non c'è Supabase o come cache
+  useEffect(() => {
+    localStorage.setItem('agenda_appointments', JSON.stringify(appointments));
+  }, [appointments]);
+
+  useEffect(() => {
+    localStorage.setItem('agenda_daily_notes', JSON.stringify(dailyNotes));
+  }, [dailyNotes]);
 
   // Giorni visibili nella griglia
   const visibleDays = useMemo(() => {
@@ -62,11 +119,11 @@ export default function App() {
   };
 
   const handleToday = () => {
-    setStartDateStr('2026-11-04'); // o toISODate(new Date())
+    setStartDateStr('2026-11-04');
   };
 
   // Operazioni CRUD Appuntamenti
-  const handleSaveAppointment = (app: Appointment) => {
+  const handleSaveAppointment = async (app: Appointment) => {
     setAppointments((prev) => {
       const idx = prev.findIndex((a) => a.id === app.id);
       if (idx >= 0) {
@@ -77,15 +134,23 @@ export default function App() {
       return [...prev, app];
     });
     setLastUpdateDate(new Date());
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('appointments').upsert(app);
+    }
   };
 
-  const handleDeleteAppointment = (id: string) => {
+  const handleDeleteAppointment = async (id: string) => {
     setAppointments((prev) => prev.filter((a) => a.id !== id));
     setLastUpdateDate(new Date());
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('appointments').delete().eq('id', id);
+    }
   };
 
   // Operazioni CRUD Ferie / Assenze
-  const handleSaveNote = (note: DailyNote) => {
+  const handleSaveNote = async (note: DailyNote) => {
     setDailyNotes((prev) => {
       const idx = prev.findIndex((n) => n.id === note.id);
       if (idx >= 0) {
@@ -96,11 +161,19 @@ export default function App() {
       return [...prev, note];
     });
     setLastUpdateDate(new Date());
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('daily_notes').upsert(note);
+    }
   };
 
-  const handleDeleteNote = (id: string) => {
+  const handleDeleteNote = async (id: string) => {
     setDailyNotes((prev) => prev.filter((n) => n.id !== id));
     setLastUpdateDate(new Date());
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('daily_notes').delete().eq('id', id);
+    }
   };
 
   // Stampa
@@ -124,6 +197,15 @@ export default function App() {
                 <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Segreteria
                 </span>
+                {isSupabaseConfigured ? (
+                  <span className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-md flex items-center gap-1 font-medium" title="Sincronizzazione Realtime Supabase attiva">
+                    <Wifi size={11} /> Cloud Realtime
+                  </span>
+                ) : (
+                  <span className="text-[11px] px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded-md flex items-center gap-1 font-medium" title="Dati salvati in locale">
+                    <WifiOff size={11} /> Locale
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 flex items-center gap-1">
                 <Clock size={12} /> {formatTimestamp(lastUpdateDate)}
@@ -135,20 +217,20 @@ export default function App() {
           <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
               onClick={handlePrevRange}
-              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition"
+              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition cursor-pointer"
               title="Periodo precedente"
             >
               <ChevronLeft size={18} />
             </button>
             <button
               onClick={handleToday}
-              className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition"
+              className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition cursor-pointer"
             >
               Novembre '26
             </button>
             <button
               onClick={handleNextRange}
-              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition"
+              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition cursor-pointer"
               title="Periodo successivo"
             >
               <ChevronRight size={18} />
@@ -188,7 +270,7 @@ export default function App() {
                 setModalDefaultDate(startDateStr);
                 setIsAppModalOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-sm hover:shadow transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-sm hover:shadow transition cursor-pointer"
             >
               <Plus size={16} /> Nuovo Appuntamento
             </button>
@@ -199,14 +281,14 @@ export default function App() {
                 setModalDefaultDate(startDateStr);
                 setIsNoteModalOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-50 text-sky-800 hover:bg-sky-100 border border-sky-200 font-semibold text-sm transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-50 text-sky-800 hover:bg-sky-100 border border-sky-200 font-semibold text-sm transition cursor-pointer"
             >
               <UserPlus size={16} /> Ferie / Assenza
             </button>
 
             <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-black text-white font-semibold text-sm shadow-sm transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-black text-white font-semibold text-sm shadow-sm transition cursor-pointer"
               title="Stampa A4 pulita fronte/retro"
             >
               <Printer size={16} /> Stampa A4
@@ -292,7 +374,7 @@ export default function App() {
                         setModalDefaultDate(isoDay);
                         setIsAppModalOpen(true);
                       }}
-                      className="no-print opacity-0 group-hover:opacity-100 transition p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg text-xs flex items-center gap-1 font-semibold"
+                      className="no-print opacity-0 group-hover:opacity-100 transition p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg text-xs flex items-center gap-1 font-semibold cursor-pointer"
                       title="Aggiungi appuntamento a questa data"
                     >
                       <Plus size={14} /> Aggiungi
@@ -322,13 +404,13 @@ export default function App() {
                                 setEditingNote(note);
                                 setIsNoteModalOpen(true);
                               }}
-                              className="p-1 text-slate-400 hover:text-blue-600 rounded"
+                              className="p-1 text-slate-400 hover:text-blue-600 rounded cursor-pointer"
                             >
                               <Edit2 size={13} />
                             </button>
                             <button
                               onClick={() => handleDeleteNote(note.id)}
-                              className="p-1 text-slate-400 hover:text-red-600 rounded"
+                              className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
                             >
                               <Trash2 size={13} />
                             </button>
@@ -391,14 +473,14 @@ export default function App() {
                                   setEditingAppointment(app);
                                   setIsAppModalOpen(true);
                                 }}
-                                className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                                className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
                                 title="Modifica"
                               >
                                 <Edit2 size={14} />
                               </button>
                               <button
                                 onClick={() => handleDeleteAppointment(app.id)}
-                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
                                 title="Elimina"
                               >
                                 <Trash2 size={14} />
@@ -419,8 +501,8 @@ export default function App() {
 
           {/* NOTA A FONDO PAGINA */}
           <div className="mt-8 pt-4 border-t border-slate-200 text-xs text-slate-400 flex items-center justify-between no-print">
-            <span>Agenda Direzione / Segreteria - Vista a 14 giorni (A4 Fronte/Retro)</span>
-            <span>Usa il pulsante <strong>Stampa A4</strong> per una copia cartacea pulita</span>
+            <span>Agenda Segreteria di Direzione - Vista a 14 giorni (A4 Fronte/Retro)</span>
+            <span>Usa il pulsante <strong>Stampa A4</strong> per stampare il foglio pulito</span>
           </div>
         </div>
       </main>
