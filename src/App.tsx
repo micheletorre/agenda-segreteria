@@ -511,8 +511,8 @@ export default function App() {
               <div className="text-red-700 font-bold tracking-tight text-base sm:text-lg">
                 {formatHeaderDate(parseISODate(startDateStr))}
               </div>
-              {/* Destra: Aggiornamento con timestamp */}
-              <div className="text-slate-800 font-serif italic text-xs sm:text-sm">
+              {/* Destra: Aggiornamento con timestamp in font Montserrat */}
+              <div className="text-slate-600 font-medium text-xs sm:text-sm tracking-tight">
                 {formatTimestamp(lastUpdateDate)}
               </div>
             </div>
