@@ -1,5 +1,16 @@
 export type AppointmentCategory = 'standard' | 'internal_red' | 'external_yellow';
 
+export interface Contact {
+  id: string;
+  name: string; // Nome e cognome
+  title?: string; // Dott., D.ssa, Avv., Ing., Arch., Sig., ecc.
+  phone?: string;
+  email?: string;
+  company?: string;
+  notes?: string;
+  created_at?: string;
+}
+
 export interface Appointment {
   id: string;
   date: string; // ISO format 'YYYY-MM-DD'
@@ -9,6 +20,7 @@ export interface Appointment {
   title: string; // e.g. 'AU riceve D.ssa Canestrari'
   category: AppointmentCategory;
   side_note?: string; // e.g. '(Paolini)', '(Ricci F.)'
+  contact_id?: string;
 }
 
 export interface DailyNote {

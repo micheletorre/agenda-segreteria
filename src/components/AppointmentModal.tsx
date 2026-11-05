@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { X, Clock, User, FileText, Tag, AlignLeft } from 'lucide-react';
-import type { Appointment, AppointmentCategory } from '../types';
+import { 
+  X, 
+  Clock, 
+  User, 
+  FileText, 
+  Tag, 
+  AlignLeft, 
+  BookUser, 
+  Check, 
+  UserPlus 
+} from 'lucide-react';
+import type { Appointment, AppointmentCategory, Contact } from '../types';
 
 interface Props {
   isOpen: boolean;
@@ -9,6 +19,8 @@ interface Props {
   onDelete?: (id: string) => void;
   initialData?: Appointment | null;
   defaultDate?: string;
+  contacts?: Contact[];
+  onQuickSaveContact?: (contact: Contact) => void;
 }
 
 export const AppointmentModal: React.FC<Props> = ({
@@ -18,6 +30,8 @@ export const AppointmentModal: React.FC<Props> = ({
   onDelete,
   initialData,
   defaultDate,
+  contacts = [],
+  onQuickSaveContact,
 }) => {
   const [date, setDate] = useState('');
   const [timeLabel, setTimeLabel] = useState('');
@@ -25,6 +39,24 @@ export const AppointmentModal: React.FC<Props> = ({
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<AppointmentCategory>('standard');
   const [sideNote, setSideNote] = useState('');
+  const [contactId, setContactId] = useState<string | undefined>(undefined);
+
+  // Autocomplete contatti
+  const [showContactPicker, setShowContactPicker] = useState(false);
+  const [savedContactSuccess, setSavedContactSuccess] = useState(false);
+
+  const handleQuickSaveCurrent = () => {
+    if (!onQuickSaveContact) return;
+    const raw = sideNote.replace(/[()]/g, '').trim() || title.replace(/AU riceve\s*/i, '').trim();
+    if (!raw) return;
+    onQuickSaveContact({
+      id: `cont-${Date.now()}`,
+      name: raw,
+      title: 'Dott.',
+    });
+    setSavedContactSuccess(true);
+    setTimeout(() => setSavedContactSuccess(false), 2000);
+  };
 
   useEffect(() => {
     if (initialData) {
@@ -34,6 +66,7 @@ export const AppointmentModal: React.FC<Props> = ({
       setTitle(initialData.title || '');
       setCategory(initialData.category || 'standard');
       setSideNote(initialData.side_note || '');
+      setContactId(initialData.contact_id);
     } else {
       setDate(defaultDate || new Date().toISOString().split('T')[0]);
       setTimeLabel('h 10.00');
@@ -41,7 +74,9 @@ export const AppointmentModal: React.FC<Props> = ({
       setTitle('');
       setCategory('standard');
       setSideNote('');
+      setContactId(undefined);
     }
+    setShowContactPicker(false);
   }, [initialData, defaultDate, isOpen]);
 
   if (!isOpen) return null;
@@ -64,23 +99,38 @@ export const AppointmentModal: React.FC<Props> = ({
       title: title.trim(),
       category,
       side_note: formattedSideNote,
+      contact_id: contactId,
     });
     onClose();
+  };
+
+  const handlePickContact = (c: Contact) => {
+    const formattedTitle = c.title ? `${c.title} ${c.name}` : c.name;
+    // Se il titolo è ancora vuoto, proponiamo 'AU riceve [Titolo] [Nome]'
+    if (!title.trim() || title === 'AU riceve ' || title.startsWith('AU riceve')) {
+      setTitle(`AU riceve ${formattedTitle}`);
+      setCategory('internal_red');
+    }
+    setContactId(c.id);
+    setShowContactPicker(false);
   };
 
   const QUICK_TIMES = ['h 09.00', 'h 10.00', 'h 11.45', 'h 15.00', 'in mattinata', 'a seguire', 'pomeriggio'];
   const QUICK_REFERENTS = ['MC', 'Giulia', 'Risorg', ''];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs no-print">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-800">
-            {initialData ? 'Modifica Appuntamento' : 'Nuovo Appuntamento'}
-          </h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs no-print animate-in fade-in duration-150">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[95vh] overflow-y-auto border border-slate-200">
+        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold leading-tight">
+              {initialData ? 'Modifica Appuntamento' : 'Nuovo Appuntamento'}
+            </h2>
+            <p className="text-xs text-slate-300">Compilazione rapida per agenda di segreteria</p>
+          </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -123,8 +173,8 @@ export const AppointmentModal: React.FC<Props> = ({
                   onClick={() => setTimeLabel(qt)}
                   className={`text-xs px-2.5 py-1 rounded-lg border transition ${
                     timeLabel === qt
-                      ? 'bg-blue-50 text-blue-700 border-blue-300 font-semibold'
-                      : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                      ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
                   {qt}
@@ -133,30 +183,29 @@ export const AppointmentModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Referente / Sigla */}
+          {/* Referente / Sigla Ufficio */}
           <div>
             <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-1">
-              <User size={16} className="text-slate-400" /> Referente / Sigla Ufficio
+              <User size={16} className="text-slate-400" /> Sigla / Referente
             </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={referent}
-                onChange={(e) => setReferent(e.target.value)}
-                placeholder="es. MC, Giulia, Risorg"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-base"
-              />
-            </div>
+            <input
+              type="text"
+              value={referent}
+              onChange={(e) => setReferent(e.target.value)}
+              placeholder="es. MC, Giulia, Risorg (o lascia vuoto)"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-base"
+            />
+            {/* Scorciatoie Referente */}
             <div className="flex gap-1.5 mt-2">
               {QUICK_REFERENTS.map((qr) => (
                 <button
-                  key={qr || 'vuoto'}
+                  key={qr || 'nessuno'}
                   type="button"
                   onClick={() => setReferent(qr)}
                   className={`text-xs px-2.5 py-1 rounded-lg border transition ${
                     referent === qr
-                      ? 'bg-slate-800 text-white border-slate-800 font-semibold'
-                      : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                      ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
                   {qr || 'Nessuno'}
@@ -165,11 +214,56 @@ export const AppointmentModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Oggetto / Descrizione */}
+          {/* Oggetto / Descrizione + Selezione da Anagrafica */}
           <div>
-            <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-1">
-              <FileText size={16} className="text-slate-400" /> Oggetto / Descrizione
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                <FileText size={16} className="text-slate-400" /> Oggetto / Descrizione
+              </label>
+              <div className="flex items-center gap-3">
+                {onQuickSaveContact && (
+                  <button
+                    type="button"
+                    onClick={handleQuickSaveCurrent}
+                    className="text-xs text-slate-500 hover:text-emerald-700 font-semibold flex items-center gap-1 transition cursor-pointer"
+                    title="Salva nome inserito in Rubrica"
+                  >
+                    {savedContactSuccess ? <Check size={13} className="text-emerald-600" /> : <UserPlus size={13} />}
+                    {savedContactSuccess ? 'Salvato!' : '+ Salva in Rubrica'}
+                  </button>
+                )}
+                {contacts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowContactPicker(!showContactPicker)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <BookUser size={13} /> {showContactPicker ? 'Nascondi rubrica' : 'Scegli da Anagrafica'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Dropdown rapido contatti anagrafica */}
+            {showContactPicker && (
+              <div className="mb-2 p-2 bg-slate-50 border border-slate-200 rounded-xl max-h-36 overflow-y-auto space-y-1">
+                <div className="text-[11px] font-bold text-slate-500 uppercase px-1">Seleziona contatto:</div>
+                {contacts.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => handlePickContact(c)}
+                    className="w-full text-left px-2 py-1 rounded-lg hover:bg-white hover:shadow-2xs text-xs flex items-center justify-between transition"
+                  >
+                    <span className="font-semibold text-slate-800">
+                      {c.title ? `${c.title} ` : ''}{c.name}
+                    </span>
+                    <span className="text-[11px] text-slate-400">{c.company || c.phone || ''}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <input
               type="text"
               value={title}
@@ -183,15 +277,15 @@ export const AppointmentModal: React.FC<Props> = ({
           {/* Tipo e Stile di Visualizzazione */}
           <div>
             <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-2">
-              <Tag size={16} className="text-slate-400" /> Stile Grafico ed Evidenziazione
+              <Tag size={16} className="text-slate-400" /> Stile ed Evidenziazione
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setCategory('standard')}
-                className={`p-2.5 rounded-xl border text-center transition ${
+                className={`p-2.5 rounded-xl border text-center transition cursor-pointer ${
                   category === 'standard'
-                    ? 'border-slate-800 bg-slate-50 ring-2 ring-slate-800'
+                    ? 'border-slate-800 bg-slate-100 ring-2 ring-slate-800'
                     : 'border-slate-200 hover:bg-slate-50'
                 }`}
               >
@@ -202,7 +296,7 @@ export const AppointmentModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => setCategory('internal_red')}
-                className={`p-2.5 rounded-xl border text-center transition ${
+                className={`p-2.5 rounded-xl border text-center transition cursor-pointer ${
                   category === 'internal_red'
                     ? 'border-red-500 bg-red-50 ring-2 ring-red-400'
                     : 'border-slate-200 hover:bg-red-50/50'
@@ -215,13 +309,13 @@ export const AppointmentModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => setCategory('external_yellow')}
-                className={`p-2.5 rounded-xl border text-center transition ${
+                className={`p-2.5 rounded-xl border text-center transition cursor-pointer ${
                   category === 'external_yellow'
                     ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-400'
                     : 'border-slate-200 hover:bg-amber-50/50'
                 }`}
               >
-                <div className="text-xs text-amber-700 mb-0.5">AU Fuori sede (c/o)</div>
+                <div className="text-xs text-amber-700 mb-0.5">AU Fuori sede</div>
                 <div className="text-sm font-bold bg-amber-200 text-amber-950 px-1 rounded">Giallo Soft</div>
               </button>
             </div>
@@ -236,7 +330,7 @@ export const AppointmentModal: React.FC<Props> = ({
               type="text"
               value={sideNote}
               onChange={(e) => setSideNote(e.target.value)}
-              placeholder="es. Paolini, Ricci F. (le parentesi vengono aggiunte da sole)"
+              placeholder="es. Paolini, Ricci F. (le parentesi vengono aggiunte in automatico)"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-base"
             />
           </div>
@@ -252,7 +346,7 @@ export const AppointmentModal: React.FC<Props> = ({
                     onClose();
                   }
                 }}
-                className="px-4 py-2.5 rounded-xl text-red-600 hover:bg-red-50 font-semibold text-sm transition"
+                className="px-4 py-2.5 rounded-xl text-red-600 hover:bg-red-50 font-semibold text-sm transition cursor-pointer"
               >
                 Elimina
               </button>
@@ -262,13 +356,13 @@ export const AppointmentModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold text-sm transition"
+                className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold text-sm transition cursor-pointer"
               >
                 Annulla
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-semibold text-sm shadow-md transition"
+                className="px-6 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-semibold text-sm shadow-md transition cursor-pointer"
               >
                 Salva
               </button>

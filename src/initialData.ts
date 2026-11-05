@@ -1,4 +1,55 @@
-import type { Appointment, DailyNote } from './types';
+import type { Appointment, DailyNote, Contact } from './types';
+
+export const INITIAL_CONTACTS: Contact[] = [
+  {
+    id: 'cont-1',
+    title: 'D.ssa',
+    name: 'Canestrari',
+    phone: '+39 06 1234567',
+    email: 'canestrari@studio.it',
+    company: 'Consulenze Mediche',
+    notes: 'Referente MC'
+  },
+  {
+    id: 'cont-2',
+    title: 'Dott.',
+    name: 'Nitoglia',
+    phone: '+39 06 7654321',
+    email: 'nitoglia@commercialisti.it',
+    company: 'Studio Nitoglia',
+    notes: 'Appuntamenti periodici giovedì/martedì'
+  },
+  {
+    id: 'cont-3',
+    title: 'Dott.ssa',
+    name: 'Galli',
+    phone: '+39 06 9988776',
+    email: 'galli@studiolegale.it',
+    company: 'Studio Legale',
+    notes: 'Incontri c/o sua sede'
+  },
+  {
+    id: 'cont-4',
+    title: 'Dott.ssa',
+    name: 'Spagnolo',
+    phone: '+39 06 4433221',
+    company: 'Clinica Ars Biomedica'
+  },
+  {
+    id: 'cont-5',
+    title: 'Sig.',
+    name: 'Paolini',
+    company: 'DLG Impianti',
+    notes: 'Inversione stagionale e manutenzione'
+  },
+  {
+    id: 'cont-6',
+    title: 'Sig.',
+    name: 'Ricci F.',
+    company: 'Impresa Edile',
+    notes: 'Sopralluoghi e pittura'
+  }
+];
 
 export const INITIAL_APPOINTMENTS: Appointment[] = [
   // Mercoledì 04 novembre

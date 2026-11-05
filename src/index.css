@@ -1,48 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300..800;1,300..800&display=swap');
 @import "tailwindcss";
 
 @layer base {
   body {
-    @apply bg-slate-100 text-slate-800 antialiased min-h-screen;
+    font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
+    @apply antialiased min-h-screen text-slate-900;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
-@media print {
-  @page {
-    size: A4 portrait;
-    margin: 10mm 12mm 12mm 12mm;
-  }
+/* =========================================================
+   STILI DI STAMPA A4 CALIBRATI AL 100% DI SCALA NATURALE
+   Elimina la necessità di zoom manuale al 60% nel browser!
+   ========================================================= */
+@page {
+  size: A4 portrait;
+  margin: 7mm 8mm 8mm 8mm;
+}
 
-  body {
-    background-color: #ffffff !important;
+@media print {
+  html, body {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    background: #ffffff !important;
     color: #000000 !important;
     padding: 0 !important;
     margin: 0 !important;
+    font-size: 10.5pt !important;
+    line-height: 1.25 !important;
+    font-family: 'Montserrat', sans-serif !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  .no-print {
+  /* Nascondi tutti i controlli interattivi a video */
+  .no-print, header, nav, .print-hidden {
     display: none !important;
   }
 
-  .print-page {
+  /* Contenitore foglio stampato */
+  .print-page-container {
     width: 100% !important;
     max-width: 100% !important;
-    box-shadow: none !important;
-    border: none !important;
-    padding: 0 !important;
     margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
   }
 
+  /* Blocco giorno calibrato per A4 con alternanza zebra stampabile */
   .day-block {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
+    margin-bottom: 4pt !important;
+    padding: 3pt 5pt !important;
+    border-radius: 3pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Evita che un elemento riga venga spaccato a metà */
+  /* Riga appuntamento a prova di spezzamento pagina */
   .appointment-row {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
+    font-size: 10pt !important;
+    line-height: 1.2 !important;
+    padding-top: 1pt !important;
+    padding-bottom: 1pt !important;
+  }
+
+  /* Rispetta i colori di evidenziazione anche in PDF/stampa */
+  .print-red {
+    color: #b91c1c !important;
+    font-weight: 700 !important;
+  }
+
+  .print-yellow {
+    background-color: #fef08a !important;
+    color: #000000 !important;
+    font-weight: 700 !important;
+    padding: 0 3pt !important;
+    border-radius: 2pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-weekend {
+    color: #991b1b !important;
+    font-weight: 700 !important;
+  }
+
+  .print-sky {
+    color: #0369a1 !important;
+    font-weight: 600 !important;
+  }
+
+  .print-zebra-even {
+    background-color: #ffffff !important;
+    border: 0.5pt solid #cbd5e1 !important;
+  }
+
+  .print-zebra-odd {
+    background-color: #f1f5f9 !important;
+    border: 0.5pt solid #cbd5e1 !important;
   }
 }

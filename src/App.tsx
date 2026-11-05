@@ -10,10 +10,19 @@ import {
   Edit2,
   Trash2,
   Wifi,
-  WifiOff
+  WifiOff,
+  BookUser,
+  Share2,
+  Calendar as CalendarIcon,
+  Smartphone,
+  LayoutDashboard,
+  CalendarPlus,
+  Building2,
+  CheckCircle2,
+  FileText
 } from 'lucide-react';
-import type { Appointment, DailyNote } from './types';
-import { INITIAL_APPOINTMENTS, INITIAL_DAILY_NOTES } from './initialData';
+import type { Appointment, DailyNote, Contact } from './types';
+import { INITIAL_APPOINTMENTS, INITIAL_DAILY_NOTES, INITIAL_CONTACTS } from './initialData';
 import { 
   formatDayTitle, 
   formatHeaderDate, 
@@ -22,11 +31,35 @@ import {
   parseISODate,
   toISODate 
 } from './utils/dateUtils';
+import { getGoogleCalendarUrl, downloadICS } from './utils/calendarUtils';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { AppointmentModal } from './components/AppointmentModal';
 import { DailyNoteModal } from './components/DailyNoteModal';
+import { ContactsModal } from './components/ContactsModal';
+import { ShareModal } from './components/ShareModal';
+import { PrintModal } from './components/PrintModal';
+
+// Nome applicazione configurabile (pronto per essere personalizzato su indicazione della segreteria)
+export const APP_NAME = 'AGENDA SEGRETERIA';
+export const APP_SUBTITLE = 'Direzione';
+export const CREDIT_LABEL = 'Sviluppo e supporto: Michele Torre';
+
+function isMobileRouteRequested(): boolean {
+  if (typeof window === 'undefined') return false;
+  const search = window.location.search || '';
+  const hash = window.location.hash || '';
+  return (
+    search.includes('vista=mobile') ||
+    search.includes('sola_lettura=true') ||
+    hash.includes('vista=mobile') ||
+    hash.includes('mobile')
+  );
+}
 
 export default function App() {
+  // Modalità di visualizzazione: Gestione (desktop) vs Consultazione (mobile / sola lettura)
+  const [isMobileMode, setIsMobileMode] = useState<boolean>(() => isMobileRouteRequested());
+
   // Data e Appuntamenti (con fallback localStorage)
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
     const saved = localStorage.getItem('agenda_appointments');
@@ -38,11 +71,26 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_DAILY_NOTES;
   });
 
-  const [lastUpdateDate, setLastUpdateDate] = useState<Date>(new Date(2026, 10, 3, 18, 30));
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    const saved = localStorage.getItem('agenda_contacts');
+    return saved ? JSON.parse(saved) : INITIAL_CONTACTS;
+  });
+
+  const [lastUpdateDate, setLastUpdateDate] = useState<Date>(new Date());
 
   // Visualizzazione e navigazione
-  const [startDateStr, setStartDateStr] = useState<string>('2026-11-04');
-  const [daysCount, setDaysCount] = useState<number>(14); // 14 giorni predefiniti per 2 pagine A4 fronte/retro
+  const [startDateStr, setStartDateStr] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlDate = urlParams.get('data');
+      if (urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate)) {
+        return urlDate;
+      }
+    }
+    return '2026-11-04';
+  });
+
+  const [daysCount, setDaysCount] = useState<number>(14); // 14 giorni predefiniti (2 pagine A4 fronte/retro)
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Modali
@@ -53,24 +101,39 @@ export default function App() {
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<DailyNote | null>(null);
 
+  const [isContactsModalOpen, setIsContactsModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
   // Caricamento e Realtime con Supabase
   useEffect(() => {
     const client = supabase;
     if (!isSupabaseConfigured || !client) return;
 
     const fetchSupabaseData = async () => {
-      const { data: appsData } = await client.from('appointments').select('*').order('date', { ascending: true });
-      if (appsData && appsData.length > 0) {
-        setAppointments(appsData);
-        localStorage.setItem('agenda_appointments', JSON.stringify(appsData));
-      }
+      try {
+        const { data: appsData } = await client.from('appointments').select('*').order('date', { ascending: true });
+        if (appsData && appsData.length > 0) {
+          setAppointments(appsData);
+          localStorage.setItem('agenda_appointments', JSON.stringify(appsData));
+        }
 
-      const { data: notesData } = await client.from('daily_notes').select('*').order('start_date', { ascending: true });
-      if (notesData && notesData.length > 0) {
-        setDailyNotes(notesData);
-        localStorage.setItem('agenda_daily_notes', JSON.stringify(notesData));
+        const { data: notesData } = await client.from('daily_notes').select('*').order('start_date', { ascending: true });
+        if (notesData && notesData.length > 0) {
+          setDailyNotes(notesData);
+          localStorage.setItem('agenda_daily_notes', JSON.stringify(notesData));
+        }
+
+        const { data: contactsData } = await client.from('contacts').select('*').order('name', { ascending: true });
+        if (contactsData && contactsData.length > 0) {
+          setContacts(contactsData);
+          localStorage.setItem('agenda_contacts', JSON.stringify(contactsData));
+        }
+
+        setLastUpdateDate(new Date());
+      } catch (err) {
+        console.warn('Fallback a storage locale:', err);
       }
-      setLastUpdateDate(new Date());
     };
 
     fetchSupabaseData();
@@ -84,6 +147,9 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_notes' }, () => {
         fetchSupabaseData();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contacts' }, () => {
+        fetchSupabaseData();
+      })
       .subscribe();
 
     return () => {
@@ -91,7 +157,7 @@ export default function App() {
     };
   }, []);
 
-  // Salva su LocalStorage se non c'è Supabase o come cache
+  // Salva su LocalStorage
   useEffect(() => {
     localStorage.setItem('agenda_appointments', JSON.stringify(appointments));
   }, [appointments]);
@@ -100,36 +166,44 @@ export default function App() {
     localStorage.setItem('agenda_daily_notes', JSON.stringify(dailyNotes));
   }, [dailyNotes]);
 
-  // Giorni visibili nella griglia
+  useEffect(() => {
+    localStorage.setItem('agenda_contacts', JSON.stringify(contacts));
+  }, [contacts]);
+
+  // Lista giorni da visualizzare
   const visibleDays = useMemo(() => {
     return getDaysRange(startDateStr, daysCount);
   }, [startDateStr, daysCount]);
 
-  // Navigazione
+  // Handlers Navigazione Temporale
   const handlePrevRange = () => {
-    const cur = parseISODate(startDateStr);
-    cur.setDate(cur.getDate() - daysCount);
-    setStartDateStr(toISODate(cur));
+    const d = parseISODate(startDateStr);
+    d.setDate(d.getDate() - daysCount);
+    setStartDateStr(toISODate(d));
   };
 
   const handleNextRange = () => {
-    const cur = parseISODate(startDateStr);
-    cur.setDate(cur.getDate() + daysCount);
-    setStartDateStr(toISODate(cur));
+    const d = parseISODate(startDateStr);
+    d.setDate(d.getDate() + daysCount);
+    setStartDateStr(toISODate(d));
   };
 
   const handleToday = () => {
-    setStartDateStr('2026-11-04');
+    setStartDateStr(toISODate(new Date()));
   };
 
-  // Operazioni CRUD Appuntamenti
+  const handleDirectDatePick = (isoDate: string) => {
+    if (isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+      setStartDateStr(isoDate);
+    }
+  };
+
+  // CRUD Appuntamenti
   const handleSaveAppointment = async (app: Appointment) => {
     setAppointments((prev) => {
-      const idx = prev.findIndex((a) => a.id === app.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = app;
-        return next;
+      const exists = prev.some((a) => a.id === app.id);
+      if (exists) {
+        return prev.map((a) => (a.id === app.id ? app : a));
       }
       return [...prev, app];
     });
@@ -149,14 +223,12 @@ export default function App() {
     }
   };
 
-  // Operazioni CRUD Ferie / Assenze
+  // CRUD Note Giornata / Ferie
   const handleSaveNote = async (note: DailyNote) => {
     setDailyNotes((prev) => {
-      const idx = prev.findIndex((n) => n.id === note.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = note;
-        return next;
+      const exists = prev.some((n) => n.id === note.id);
+      if (exists) {
+        return prev.map((n) => (n.id === note.id ? note : n));
       }
       return [...prev, note];
     });
@@ -176,136 +248,267 @@ export default function App() {
     }
   };
 
+  // CRUD Contatti Anagrafica
+  const handleSaveContact = async (contact: Contact) => {
+    setContacts((prev) => {
+      const exists = prev.some((c) => c.id === contact.id);
+      if (exists) {
+        return prev.map((c) => (c.id === contact.id ? contact : c));
+      }
+      return [...prev, contact];
+    });
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('contacts').upsert(contact);
+    }
+  };
+
+  const handleDeleteContact = async (id: string) => {
+    setContacts((prev) => prev.filter((c) => c.id !== id));
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('contacts').delete().eq('id', id);
+    }
+  };
+
   // Stampa
-  const handlePrint = () => {
+  const handleExecutePrint = () => {
     window.print();
   };
 
+  const handleApplyAndPrint = (fromIso: string, count: number) => {
+    setStartDateStr(fromIso);
+    setDaysCount(count);
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
+  // Calcolo etichetta periodo corrente per l'header
+  const periodLabel = useMemo(() => {
+    const s = parseISODate(startDateStr);
+    const e = new Date(s);
+    e.setDate(s.getDate() + (daysCount - 1));
+    return `${formatHeaderDate(s)} — ${formatHeaderDate(e)}`;
+  }, [startDateStr, daysCount]);
+
   return (
-    <div className="min-h-screen bg-slate-100/80 text-slate-900 pb-12 print:bg-white print:p-0 print:pb-0">
-      {/* BARRA SUPERIORE MODERNA (Nascosta in Stampa) */}
-      <header className="no-print bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+    <div className={`min-h-screen antialiased pb-16 print:bg-white print:text-black print:p-0 print:pb-0 ${
+      isMobileMode 
+        ? 'bg-slate-900 text-slate-100' 
+        : 'bg-slate-100/90 text-slate-900'
+    }`}>
+      
+      {/* ======================================================== */}
+      {/* 1. TOP HEADER SCURO MODERNO (Ispirato all'app Turni)      */}
+      {/* ======================================================== */}
+      <header className="no-print bg-slate-900 border-b border-slate-800 sticky top-0 z-40 shadow-lg text-white">
+        {/* Riga Superiore: Brand, Indicatori di stato e Cambio Vista */}
+        <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+          
           {/* Logo & Titolo */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 font-bold text-lg">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 text-slate-950 flex items-center justify-center shadow-md font-black text-lg">
               A
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-slate-900 leading-tight">AGENDA</h1>
-                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Segreteria
+                <span className="font-extrabold tracking-wide text-white text-base sm:text-lg">
+                  {APP_NAME} <span className="text-amber-400 font-normal">· {APP_SUBTITLE}</span>
                 </span>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Direzione
+                </span>
+
                 {isSupabaseConfigured ? (
-                  <span className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-md flex items-center gap-1 font-medium" title="Sincronizzazione Realtime Supabase attiva">
-                    <Wifi size={11} /> Cloud Realtime
+                  <span className="text-[11px] px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-md flex items-center gap-1 font-semibold" title="Sincronizzazione Cloud Supabase attiva">
+                    <Wifi size={12} /> Cloud Realtime
                   </span>
                 ) : (
-                  <span className="text-[11px] px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded-md flex items-center gap-1 font-medium" title="Dati salvati in locale">
-                    <WifiOff size={11} /> Locale
+                  <span className="text-[11px] px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-md flex items-center gap-1 font-medium" title="Dati salvati in locale">
+                    <WifiOff size={12} /> Locale
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 flex items-center gap-1">
-                <Clock size={12} /> {formatTimestamp(lastUpdateDate)}
+              <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                <Clock size={11} className="text-slate-500" /> {formatTimestamp(lastUpdateDate)}
               </p>
             </div>
           </div>
 
-          {/* Navigazione temporale */}
-          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
+          {/* Pill Selector: Modalità Gestione vs Consultazione Mobile */}
+          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800">
             <button
-              onClick={handlePrevRange}
-              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition cursor-pointer"
-              title="Periodo precedente"
+              onClick={() => setIsMobileMode(false)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                !isMobileMode
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-              <ChevronLeft size={18} />
+              <LayoutDashboard size={14} /> Modalità Segreteria
             </button>
             <button
-              onClick={handleToday}
-              className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition cursor-pointer"
+              onClick={() => setIsMobileMode(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                isMobileMode
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-              Novembre '26
+              <Smartphone size={14} /> Anteprima Mobile
             </button>
-            <button
-              onClick={handleNextRange}
-              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition cursor-pointer"
-              title="Periodo successivo"
-            >
-              <ChevronRight size={18} />
-            </button>
-
-            <div className="h-4 w-px bg-slate-300 mx-1" />
-
-            {/* Scelta Range */}
-            <select
-              value={daysCount}
-              onChange={(e) => setDaysCount(Number(e.target.value))}
-              className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-hidden cursor-pointer pr-1"
-            >
-              <option value={7}>7 giorni (1 pag.)</option>
-              <option value={14}>14 giorni (2 pag. Fronte/Retro)</option>
-              <option value={28}>28 giorni (1 mese)</option>
-            </select>
           </div>
 
-          {/* Ricerca Rapida */}
-          <div className="relative hidden md:block w-48">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Cerca impegno o ditta..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition"
-            />
-          </div>
-
-          {/* Pulsanti Azione Principali */}
+          {/* Azioni Rapide Barra Superiore */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                setEditingAppointment(null);
-                setModalDefaultDate(startDateStr);
-                setIsAppModalOpen(true);
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-sm hover:shadow transition cursor-pointer"
+              onClick={() => setIsContactsModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+              title="Apri Rubrica Anagrafica"
             >
-              <Plus size={16} /> Nuovo Appuntamento
+              <BookUser size={14} className="text-blue-400" /> Anagrafica ({contacts.length})
             </button>
 
             <button
-              onClick={() => {
-                setEditingNote(null);
-                setModalDefaultDate(startDateStr);
-                setIsNoteModalOpen(true);
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-50 text-sky-800 hover:bg-sky-100 border border-sky-200 font-semibold text-sm transition cursor-pointer"
+              onClick={() => setIsShareModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+              title="Condivisione serale con PDF per Mail, WhatsApp e SMS"
             >
-              <UserPlus size={16} /> Ferie / Assenza
+              <Share2 size={14} /> Condividi Sera
             </button>
 
             <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-black text-white font-semibold text-sm shadow-sm transition cursor-pointer"
-              title="Stampa A4 pulita fronte/retro"
+              onClick={() => setIsPrintModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-white text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+              title="Configura e stampa il foglio A4"
             >
-              <Printer size={16} /> Stampa A4
+              <Printer size={14} /> Stampa A4
             </button>
+          </div>
+
+        </div>
+
+        {/* Riga Inferiore: Barra di Navigazione Data Picker, Filtri e Nuovo Impegno */}
+        <div className="bg-slate-900/95 border-t border-slate-800/80 px-4 py-2">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            
+            {/* Blocco Navigazione Temporale */}
+            <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <button
+                onClick={handlePrevRange}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                title="Periodo precedente"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <button
+                onClick={handleToday}
+                className="px-2.5 py-1 rounded-lg text-xs font-bold text-amber-400 hover:bg-slate-800 transition cursor-pointer"
+                title="Salta alla data odierna"
+              >
+                Oggi
+              </button>
+
+              {/* Data Picker Diretto per saltare a qualsiasi mese */}
+              <div className="relative flex items-center">
+                <input
+                  type="date"
+                  value={startDateStr}
+                  onChange={(e) => handleDirectDatePick(e.target.value)}
+                  className="bg-slate-800 text-slate-200 border border-slate-700 text-xs font-semibold px-2.5 py-1 rounded-lg focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                  title="Seleziona data di partenza dell'agenda"
+                />
+              </div>
+
+              <button
+                onClick={handleNextRange}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                title="Periodo successivo"
+              >
+                <ChevronRight size={16} />
+              </button>
+
+              <div className="h-4 w-px bg-slate-800 mx-1" />
+
+              {/* Selettore ampiezza periodo */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={daysCount}
+                  onChange={(e) => setDaysCount(Number(e.target.value))}
+                  className="bg-transparent text-xs font-bold text-slate-300 focus:outline-hidden cursor-pointer pr-1"
+                >
+                  <option value={7} className="bg-slate-900 text-white">7 giorni (1 facciata A4)</option>
+                  <option value={14} className="bg-slate-900 text-white">14 giorni (2 facciate A4)</option>
+                  <option value={28} className="bg-slate-900 text-white">28 giorni (1 mese)</option>
+                </select>
+                <span className="hidden xl:inline text-[11px] font-semibold text-slate-400">
+                  ({periodLabel})
+                </span>
+              </div>
+            </div>
+
+            {/* Ricerca Rapida Impegni o Ditte */}
+            <div className="relative flex-1 max-w-xs min-w-[200px]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Cerca per impegno, ditta o contatto..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-950 text-slate-200 placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-amber-500 transition"
+              />
+            </div>
+
+            {/* Pulsanti per aggiunta appuntamenti (nascosti in modalità mobile di sola lettura) */}
+            {!isMobileMode ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setEditingAppointment(null);
+                    setModalDefaultDate(startDateStr);
+                    setIsAppModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition cursor-pointer"
+                >
+                  <Plus size={15} /> Nuovo Appuntamento
+                </button>
+
+                <button
+                  onClick={() => {
+                    setEditingNote(null);
+                    setModalDefaultDate(startDateStr);
+                    setIsNoteModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 font-semibold text-xs transition cursor-pointer"
+                >
+                  <UserPlus size={15} /> Ferie / Assenza
+                </button>
+              </div>
+            ) : (
+              <div className="text-xs text-amber-400/90 font-medium bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-lg">
+                👁️ Sola Lettura: tocca Google o iCal per salvare sul tuo calendario
+              </div>
+            )}
+
           </div>
         </div>
       </header>
 
-      {/* CONTENITORE FOGLIO AGENDA (A4-Style sia a video che in stampa) */}
+      {/* ======================================================== */}
+      {/* 2. CONTENITORE PRINCIPALE: FOGLIO AGENDA                  */}
+      {/* ======================================================== */}
       <main className="max-w-5xl mx-auto mt-6 px-4 print:max-w-none print:m-0 print:p-0">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-10 print:shadow-none print:border-none print:p-0 print:rounded-none">
+        
+        {/* FOGLIO BIANCO PERFETTO SIA A SCHERMO CHE IN STAMPA A4 */}
+        <div className="print-page-container bg-white text-slate-900 rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-9 print:shadow-none print:border-none print:p-0 print:rounded-none">
           
           {/* INTESTAZIONE IDENTICA AL DOCUMENTO CARTACEO */}
-          <div className="border-b-2 border-slate-900 pb-3 mb-4">
+          <div className="border-b-2 border-slate-900 pb-3 mb-5">
             <div className="flex justify-between items-start text-sm sm:text-base font-semibold">
               {/* Sinistra: Data emissione in rosso */}
-              <div className="text-red-700 font-bold tracking-tight">
+              <div className="text-red-700 font-bold tracking-tight text-base sm:text-lg">
                 {formatHeaderDate(parseISODate(startDateStr))}
               </div>
               {/* Destra: Aggiornamento con timestamp */}
@@ -315,16 +518,22 @@ export default function App() {
             </div>
             
             {/* Titolo Centrato AGENDA */}
-            <h2 className="text-center font-bold text-2xl sm:text-3xl text-slate-900 tracking-wider mt-1">
-              AGENDA
+            <h2 className="text-center font-black text-2xl sm:text-4xl text-slate-950 tracking-wider mt-1">
+              {APP_NAME}
             </h2>
           </div>
 
-          {/* LISTA GIORNI E APPUNTAMENTI */}
-          <div className="space-y-4 print:space-y-3">
-            {visibleDays.map((isoDay) => {
+          {/* LISTA GIORNI E APPUNTAMENTI CON SFONDO ALTERNATO (ZEBRA-STRIPING ANCHE IN STAMPA) */}
+          <div className="space-y-3.5 print:space-y-2">
+            {visibleDays.map((isoDay, index) => {
               const { dayName, dateStr, isWeekend } = formatDayTitle(isoDay);
               
+              // Alternanza sfondo: pari bianco, dispari grigio chiaro morbido
+              const isEven = index % 2 === 0;
+              const zebraClass = isEven 
+                ? 'bg-white border-slate-200/90 print-zebra-even' 
+                : 'bg-slate-50/90 border-slate-200 print-zebra-odd';
+
               // Filtra appuntamenti del giorno
               const dayApps = appointments.filter((a) => {
                 const matchesDate = a.date === isoDay;
@@ -346,39 +555,41 @@ export default function App() {
               return (
                 <div
                   key={isoDay}
-                  className="day-block group border-b border-slate-300 print:border-black/70 pb-3 transition"
+                  className={`day-block group rounded-xl p-3 sm:p-4 border transition ${zebraClass}`}
                 >
-                  {/* INTESTAZIONE GIORNO */}
-                  <div className="flex items-center justify-between py-1">
+                  {/* INTESTAZIONE GIORNO CON TESTI GRANDI E BEN LEGGIBILI (FONT MONTSERRAT) */}
+                  <div className="flex items-center justify-between pb-1">
                     <div className="flex items-baseline gap-4 sm:gap-6">
                       <span
                         className={`text-lg sm:text-xl font-bold tracking-tight min-w-[110px] sm:min-w-[130px] ${
-                          isWeekend ? 'text-rose-800 print:text-[#991b1b]' : 'text-slate-950'
+                          isWeekend ? 'text-rose-800 print-weekend' : 'text-slate-950'
                         }`}
                       >
                         {dayName}
                       </span>
                       <span
                         className={`text-lg sm:text-xl font-bold tracking-tight ${
-                          isWeekend ? 'text-rose-800 print:text-[#991b1b]' : 'text-slate-950'
+                          isWeekend ? 'text-rose-800 print-weekend' : 'text-slate-950'
                         }`}
                       >
                         {dateStr}
                       </span>
                     </div>
 
-                    {/* Bottone rapido aggiunta su giorno (+ visibile al passaggio mouse) */}
-                    <button
-                      onClick={() => {
-                        setEditingAppointment(null);
-                        setModalDefaultDate(isoDay);
-                        setIsAppModalOpen(true);
-                      }}
-                      className="no-print opacity-0 group-hover:opacity-100 transition p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg text-xs flex items-center gap-1 font-semibold cursor-pointer"
-                      title="Aggiungi appuntamento a questa data"
-                    >
-                      <Plus size={14} /> Aggiungi
-                    </button>
+                    {/* Bottone rapido aggiunta su giorno (solo modalità desktop di gestione) */}
+                    {!isMobileMode && (
+                      <button
+                        onClick={() => {
+                          setEditingAppointment(null);
+                          setModalDefaultDate(isoDay);
+                          setIsAppModalOpen(true);
+                        }}
+                        className="no-print opacity-0 group-hover:opacity-100 transition p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg text-xs flex items-center gap-1 font-semibold cursor-pointer"
+                        title="Aggiungi appuntamento a questa data"
+                      >
+                        <Plus size={14} /> Aggiungi
+                      </button>
+                    )}
                   </div>
 
                   {/* NOTE GIORNATA / FERIE (AZZURRO CHIARO) */}
@@ -391,30 +602,37 @@ export default function App() {
                         >
                           <div
                             onClick={() => {
-                              setEditingNote(note);
-                              setIsNoteModalOpen(true);
-                            }}
-                            className="text-sky-600 print:text-[#0284c7] font-medium text-base sm:text-lg cursor-pointer hover:underline"
-                          >
-                            {note.note_text}
-                          </div>
-                          <div className="no-print opacity-0 group-hover/note:opacity-100 transition flex gap-1">
-                            <button
-                              onClick={() => {
+                              if (!isMobileMode) {
                                 setEditingNote(note);
                                 setIsNoteModalOpen(true);
-                              }}
-                              className="p-1 text-slate-400 hover:text-blue-600 rounded cursor-pointer"
-                            >
-                              <Edit2 size={13} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteNote(note.id)}
-                              className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                              }
+                            }}
+                            className={`text-sky-600 print-sky font-medium text-base sm:text-lg flex items-center gap-1.5 ${
+                              !isMobileMode ? 'cursor-pointer hover:underline' : ''
+                            }`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 inline-block shrink-0" />
+                            {note.note_text}
                           </div>
+                          {!isMobileMode && (
+                            <div className="no-print opacity-0 group-hover/note:opacity-100 transition flex gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingNote(note);
+                                  setIsNoteModalOpen(true);
+                                }}
+                                className="p-1 text-slate-400 hover:text-blue-600 rounded cursor-pointer"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteNote(note.id)}
+                                className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -426,29 +644,36 @@ export default function App() {
                       {dayApps.map((app) => (
                         <div
                           key={app.id}
-                          className="appointment-row group/app flex flex-wrap sm:flex-nowrap items-baseline justify-between gap-x-4 py-0.5 hover:bg-slate-50/80 rounded-md transition px-1"
+                          className="appointment-row group/app flex flex-wrap sm:flex-nowrap items-baseline justify-between gap-x-4 py-1 hover:bg-white/90 rounded-lg transition px-2"
                         >
-                          {/* Blocco Principale: Orario + Sigla + Descrizione */}
+                          {/* Blocco Principale: Orario + Sigla + Descrizione con Micro-Icone */}
                           <div className="flex flex-wrap sm:flex-nowrap items-baseline gap-x-3 sm:gap-x-6 min-w-0 flex-1">
-                            {/* Orario / Fascia */}
-                            <span className="text-base sm:text-lg font-medium text-slate-900 min-w-[95px] sm:min-w-[110px] shrink-0">
+                            {/* Orario / Fascia con icona orologio */}
+                            <span className="text-base sm:text-lg font-medium text-slate-900 min-w-[95px] sm:min-w-[110px] shrink-0 flex items-center gap-1">
+                              <Clock size={13} className="text-slate-400 shrink-0 inline print:hidden" />
                               {app.time_label}
                             </span>
 
-                            {/* Sigla / Referente Ufficio */}
-                            <span className="text-base sm:text-lg font-medium text-slate-800 min-w-[50px] sm:min-w-[65px] shrink-0">
-                              {app.referent || ''}
+                            {/* Sigla / Referente Ufficio in badge elegante */}
+                            <span className="text-base sm:text-lg font-semibold text-slate-800 min-w-[50px] sm:min-w-[65px] shrink-0">
+                              {app.referent ? (
+                                <span className="px-1.5 py-0.5 rounded-md text-xs font-bold bg-slate-200/70 text-slate-800 border border-slate-300">
+                                  {app.referent}
+                                </span>
+                              ) : ''}
                             </span>
 
-                            {/* Descrizione / Titolo con codifica cromatica */}
-                            <div className="min-w-0">
+                            {/* Descrizione / Titolo con codifica cromatica e micro-icone */}
+                            <div className="min-w-0 flex-1">
                               {app.category === 'internal_red' ? (
-                                <span className="text-base sm:text-lg font-bold text-red-600 print:text-[#dc2626]">
-                                  {app.title}
+                                <span className="text-base sm:text-lg font-bold text-red-600 print-red flex items-baseline gap-1">
+                                  <CheckCircle2 size={14} className="text-red-500 shrink-0 inline self-center print:hidden" />
+                                  <span>{app.title}</span>
                                 </span>
                               ) : app.category === 'external_yellow' ? (
-                                <span className="text-base sm:text-lg font-bold bg-amber-200 text-amber-950 px-2 py-0.5 rounded-xs print:bg-[#fef08a] print:text-black">
-                                  {app.title}
+                                <span className="text-base sm:text-lg font-bold bg-amber-200 text-amber-950 px-2 py-0.5 rounded-xs print-yellow inline-flex items-center gap-1">
+                                  <Building2 size={13} className="text-amber-800 shrink-0 inline print:hidden" />
+                                  <span>{app.title}</span>
                                 </span>
                               ) : (
                                 <span className="text-base sm:text-lg font-medium text-slate-900">
@@ -461,53 +686,84 @@ export default function App() {
                           {/* Riferimento / Contatto a destra + Azioni rapide */}
                           <div className="flex items-center gap-3 shrink-0 ml-auto">
                             {app.side_note && (
-                              <span className="text-base sm:text-lg font-medium text-slate-800 print:text-black">
+                              <span className="text-base sm:text-lg font-medium text-slate-700 print:text-black flex items-center gap-1">
+                                <FileText size={13} className="text-slate-400 shrink-0 print:hidden" />
                                 {app.side_note}
                               </span>
                             )}
 
-                            {/* Tasti Modifica / Cancella (solo schermo) */}
-                            <div className="no-print opacity-0 group-hover/app:opacity-100 transition flex items-center gap-1">
-                              <button
-                                onClick={() => {
-                                  setEditingAppointment(app);
-                                  setIsAppModalOpen(true);
-                                }}
-                                className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
-                                title="Modifica"
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAppointment(app.id)}
-                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
-                                title="Elimina"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
+                            {/* AZIONI SPECIALI PER LA VERSIONE MOBILE (Aggiungi a Calendario) */}
+                            {isMobileMode ? (
+                              <div className="no-print flex items-center gap-1.5 ml-2">
+                                <a
+                                  href={getGoogleCalendarUrl(app)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold flex items-center gap-1 transition"
+                                  title="Aggiungi a Google Calendar"
+                                >
+                                  <CalendarPlus size={13} /> Google
+                                </a>
+                                <button
+                                  onClick={() => downloadICS(app)}
+                                  className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                                  title="Scarica file per Apple Calendar o Outlook (.ics)"
+                                >
+                                  <CalendarIcon size={13} /> iCal / Apple
+                                </button>
+                              </div>
+                            ) : (
+                              /* Tasti Modifica / Cancella (in modalità Gestione Desktop) */
+                              <div className="no-print opacity-0 group-hover/app:opacity-100 transition flex items-center gap-1">
+                                <button
+                                  onClick={() => {
+                                    setEditingAppointment(app);
+                                    setIsAppModalOpen(true);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                                  title="Modifica appuntamento"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteAppointment(app.id)}
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                                  title="Elimina"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            )}
+
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    // Spazio vuoto naturale se non ci sono appuntamenti (come i weekend nell'immagine)
-                    <div className="h-2" />
+                    // Spazio vuoto naturale se non ci sono appuntamenti
+                    <div className="h-1" />
                   )}
                 </div>
               );
             })}
           </div>
 
-          {/* NOTA A FONDO PAGINA */}
-          <div className="mt-8 pt-4 border-t border-slate-200 text-xs text-slate-400 flex items-center justify-between no-print">
-            <span>Agenda Segreteria di Direzione - Vista a 14 giorni (A4 Fronte/Retro)</span>
-            <span>Usa il pulsante <strong>Stampa A4</strong> per stampare il foglio pulito</span>
+          {/* NOTA A FONDO PAGINA E CREDITI (VISIBILI ANCHE IN STAMPA) */}
+          <div className="mt-8 pt-4 border-t border-slate-300 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2">
+            <span className="font-medium">
+              {APP_NAME} — Vista a {daysCount} giorni
+            </span>
+            <span className="font-semibold text-slate-600 tracking-wide">
+              {CREDIT_LABEL}
+            </span>
           </div>
+
         </div>
       </main>
 
-      {/* MODALI INTERATTIVI */}
+      {/* ======================================================== */}
+      {/* 3. MODALI INTERATTIVI COMPLETI                           */}
+      {/* ======================================================== */}
       <AppointmentModal
         isOpen={isAppModalOpen}
         onClose={() => setIsAppModalOpen(false)}
@@ -515,6 +771,8 @@ export default function App() {
         onDelete={handleDeleteAppointment}
         initialData={editingAppointment}
         defaultDate={modalDefaultDate}
+        contacts={contacts}
+        onQuickSaveContact={handleSaveContact}
       />
 
       <DailyNoteModal
@@ -525,6 +783,32 @@ export default function App() {
         initialData={editingNote}
         defaultDate={modalDefaultDate}
       />
+
+      <ContactsModal
+        isOpen={isContactsModalOpen}
+        onClose={() => setIsContactsModalOpen(false)}
+        contacts={contacts}
+        onSaveContact={handleSaveContact}
+        onDeleteContact={handleDeleteContact}
+      />
+
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        startDateStr={startDateStr}
+        daysCount={daysCount}
+        appointments={appointments}
+        dailyNotes={dailyNotes}
+        onTriggerPrint={handleExecutePrint}
+      />
+
+      <PrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        currentStartDate={startDateStr}
+        onApplyAndPrint={handleApplyAndPrint}
+      />
+
     </div>
   );
 }
