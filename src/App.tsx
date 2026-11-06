@@ -260,8 +260,35 @@ export default function App() {
     return map;
   }, [appointments, showConcluded]);
 
-  // Giorni effettivamente visualizzati e stampati (filtrati per escludere giornate vuote)
+  // In modalità Desktop l'editing è sempre attivo; su Mobile si attiva col lucchetto (PIN 1967)
+  const canEdit = !isMobileMode || isAdminUnlocked;
+
+  // Giorni effettivamente visualizzati:
+  // - Su Mobile: agenda perpetua scrollabile da OGGI fino a fine agenda, solo giorni impegnati
+  // - Su Desktop: intervallo selezionato nel selettore date
   const displayDays = useMemo(() => {
+    if (isMobileMode) {
+      const todayIso = toISODate(new Date());
+      let maxDate = todayIso;
+      for (const a of appointments) {
+        if (!a.is_concluded && a.date > maxDate) maxDate = a.date;
+      }
+      for (const n of dailyNotes) {
+        if (n.end_date > maxDate) maxDate = n.end_date;
+      }
+      const allFutureDays = getDaysBetween(todayIso, maxDate);
+      const busyDays = allFutureDays.filter((isoDay) => {
+        const hasApps = appointments.some(
+          (a) => a.date === isoDay && !a.is_concluded
+        );
+        const hasNotes = dailyNotes.some(
+          (n) => isoDay >= n.start_date && isoDay <= n.end_date
+        );
+        return hasApps || hasNotes;
+      });
+      return busyDays.length > 0 ? busyDays : [todayIso];
+    }
+
     if (!onlyDaysWithContent) return visibleDays;
     const filtered = visibleDays.filter((isoDay) => {
       const hasApps = appointments.some(
@@ -273,7 +300,7 @@ export default function App() {
       return hasApps || hasNotes;
     });
     return filtered.length > 0 ? filtered : visibleDays.slice(0, 1);
-  }, [visibleDays, appointments, dailyNotes, onlyDaysWithContent, showConcluded]);
+  }, [isMobileMode, visibleDays, appointments, dailyNotes, onlyDaysWithContent, showConcluded]);
 
   const concludedCount = useMemo(() => {
     return appointments.filter((a) => a.is_concluded).length;
@@ -535,30 +562,54 @@ export default function App() {
             </div>
           </div>
 
-          {/* Controllo Accesso Segreteria (PIN) */}
-          <div className="flex items-center gap-2">
-            {!isAdminUnlocked ? (
-              <button
-                onClick={() => setIsPinModalOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 text-amber-300 bg-slate-950 hover:bg-slate-800 border border-amber-500/40 shadow-xs transition cursor-pointer"
-                title="Sblocca modalità gestione tramite PIN"
-              >
-                <Lock size={14} className="text-amber-400" /> Area Segreteria
-              </button>
-            ) : (
-              <button
-                onClick={handleLockAdmin}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-amber-500 text-slate-950 hover:bg-amber-400 font-black shadow-md transition cursor-pointer"
-                title="Esci dalla gestione e torna alla modalità sola lettura"
-              >
-                <Unlock size={14} /> Esci da Segreteria
-              </button>
-            )}
-          </div>
+          {/* SU MOBILE: Lucchetto Area Segreteria per emergenze (PIN 1967) */}
+          {isMobileMode && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {!isAdminUnlocked ? (
+                <button
+                  onClick={() => setIsPinModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 text-amber-300 bg-slate-950 hover:bg-slate-800 border border-amber-500/40 shadow-xs transition cursor-pointer"
+                  title="Sblocca inserimento appuntamenti di emergenza tramite PIN"
+                >
+                  <Lock size={13} className="text-amber-400" /> Area Segreteria
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setEditingAppointment(null);
+                      setModalDefaultDate(toISODate(new Date()));
+                      setIsAppModalOpen(true);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition cursor-pointer"
+                  >
+                    <Plus size={14} /> Nuovo Impegno
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingNote(null);
+                      setModalDefaultDate(toISODate(new Date()));
+                      setIsNoteModalOpen(true);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 font-semibold text-xs transition cursor-pointer"
+                  >
+                    <UserPlus size={14} /> Ferie
+                  </button>
+                  <button
+                    onClick={handleLockAdmin}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 bg-amber-500 text-slate-950 hover:bg-amber-400 font-black shadow-md transition cursor-pointer"
+                    title="Blocca modifiche e torna in sola lettura"
+                  >
+                    <Unlock size={13} /> Blocca
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
-          {/* Azioni Rapide Barra Superiore (VISIBILI ESCLUSIVAMENTE DOPO SBLOCCO CON PIN SEGRETERIA) */}
-          {isAdminUnlocked && (
-            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800">
+          {/* SU DESKTOP: Azioni Rapide Barra Superiore SEMPRE ATTIVE */}
+          {!isMobileMode && (
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setIsContactsModalOpen(true)}
                 className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
@@ -596,134 +647,132 @@ export default function App() {
         </div>
 
         {/* ======================================================== */}
-        {/* RIGA INFERIORE: SELETTORE DATE AD ALTO CONTRASTO E FILTRI */}
+        {/* RIGA INFERIORE (SOLO DESKTOP): SELETTORE DATE E FILTRI   */}
         {/* ======================================================== */}
-        <div className="bg-slate-950 border-t border-slate-800/80 px-4 py-2.5">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-            
-            {/* SELETTORE DATE AD ALTO CONTRASTO "DA ... A ..." CON PULSANTE FINE AGENDa */}
-            <div className="flex items-center gap-2 bg-white text-slate-900 px-3 py-1.5 rounded-xl border-2 border-amber-500 shadow-sm flex-wrap">
-              <CalendarIcon size={16} className="text-amber-600 shrink-0" />
-
-              <button
-                type="button"
-                onClick={handlePrevRange}
-                className="p-1 rounded-lg text-slate-700 hover:text-black hover:bg-slate-100 transition cursor-pointer font-bold"
-                title="Periodo precedente"
-              >
-                <ChevronLeft size={16} />
-              </button>
+        {!isMobileMode && (
+          <div className="bg-slate-950 border-t border-slate-800/80 px-4 py-2.5">
+            <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
               
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-700">Da:</span>
-                <input
-                  type="date"
-                  value={startDateStr}
-                  onChange={(e) => {
-                    setStartDateStr(e.target.value);
-                    if (e.target.value > endDateStr) setEndDateStr(e.target.value);
-                  }}
-                  className="bg-slate-100 text-slate-950 border border-slate-300 text-xs font-bold px-2 py-1 rounded-lg focus:ring-2 focus:ring-amber-500 cursor-pointer"
-                  title="Data inizio visualizzazione"
-                />
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-700">A:</span>
-                <input
-                  type="date"
-                  value={endDateStr}
-                  min={startDateStr}
-                  onChange={(e) => setEndDateStr(e.target.value)}
-                  className="bg-slate-100 text-slate-950 border border-slate-300 text-xs font-bold px-2 py-1 rounded-lg focus:ring-2 focus:ring-amber-500 cursor-pointer"
-                  title="Data fine visualizzazione"
-                />
-              </div>
-
-              <div className="h-4 w-px bg-slate-300 mx-1 hidden sm:block" />
-
-              {/* Scorciatoie Rapide */}
-              <div className="flex items-center gap-1 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const today = toISODate(new Date());
-                    setStartDateStr(today);
-                    setEndDateStr(today);
-                  }}
-                  className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
-                >
-                  Oggi
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const s = parseISODate(startDateStr);
-                    const e = new Date(s);
-                    e.setDate(e.getDate() + 13);
-                    setEndDateStr(toISODate(e));
-                  }}
-                  className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
-                >
-                  +14 Giorni
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const s = parseISODate(startDateStr);
-                    const e = new Date(s);
-                    e.setDate(e.getDate() + 30);
-                    setEndDateStr(toISODate(e));
-                  }}
-                  className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
-                >
-                  +1 Mese
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEndDateStr(latestAppointmentDate);
-                  }}
-                  className="px-2.5 py-0.5 rounded-lg text-xs font-black bg-amber-500 text-slate-950 hover:bg-amber-400 transition cursor-pointer shadow-xs flex items-center gap-1"
-                  title={`Imposta data fine fino all'ultimo appuntamento inserito (${latestAppointmentDate})`}
-                >
-                  <span>Fine Agenda</span>
-                  <span className="text-[10px] opacity-80">({latestAppointmentDate.split('-').slice(1).reverse().join('/')})</span>
-                </button>
+              {/* SELETTORE DATE AD ALTO CONTRASTO "DA ... A ..." CON PULSANTE FINE AGENDA */}
+              <div className="flex items-center gap-2 bg-white text-slate-900 px-3 py-1.5 rounded-xl border-2 border-amber-500 shadow-sm flex-wrap">
+                <CalendarIcon size={16} className="text-amber-600 shrink-0" />
 
                 <button
                   type="button"
-                  onClick={handleNextRange}
+                  onClick={handlePrevRange}
                   className="p-1 rounded-lg text-slate-700 hover:text-black hover:bg-slate-100 transition cursor-pointer font-bold"
-                  title="Periodo successivo"
+                  title="Periodo precedente"
                 >
-                  <ChevronRight size={16} />
+                  <ChevronLeft size={16} />
+                </button>
+                
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-700">Da:</span>
+                  <input
+                    type="date"
+                    value={startDateStr}
+                    onChange={(e) => {
+                      setStartDateStr(e.target.value);
+                      if (e.target.value > endDateStr) setEndDateStr(e.target.value);
+                    }}
+                    className="bg-slate-100 text-slate-950 border border-slate-300 text-xs font-bold px-2 py-1 rounded-lg focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                    title="Data inizio visualizzazione"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-700">A:</span>
+                  <input
+                    type="date"
+                    value={endDateStr}
+                    min={startDateStr}
+                    onChange={(e) => setEndDateStr(e.target.value)}
+                    className="bg-slate-100 text-slate-950 border border-slate-300 text-xs font-bold px-2 py-1 rounded-lg focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                    title="Data fine visualizzazione"
+                  />
+                </div>
+
+                <div className="h-4 w-px bg-slate-300 mx-1 hidden sm:block" />
+
+                {/* Scorciatoie Rapide */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = toISODate(new Date());
+                      setStartDateStr(today);
+                      setEndDateStr(today);
+                    }}
+                    className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
+                  >
+                    Oggi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const s = parseISODate(startDateStr);
+                      const e = new Date(s);
+                      e.setDate(e.getDate() + 13);
+                      setEndDateStr(toISODate(e));
+                    }}
+                    className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
+                  >
+                    +14 Giorni
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const s = parseISODate(startDateStr);
+                      const e = new Date(s);
+                      e.setDate(e.getDate() + 30);
+                      setEndDateStr(toISODate(e));
+                    }}
+                    className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
+                  >
+                    +1 Mese
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEndDateStr(latestAppointmentDate);
+                    }}
+                    className="px-2.5 py-0.5 rounded-lg text-xs font-black bg-amber-500 text-slate-950 hover:bg-amber-400 transition cursor-pointer shadow-xs flex items-center gap-1"
+                    title={`Imposta data fine fino all'ultimo appuntamento inserito (${latestAppointmentDate})`}
+                  >
+                    <span>Fine Agenda</span>
+                    <span className="text-[10px] opacity-80">({latestAppointmentDate.split('-').slice(1).reverse().join('/')})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleNextRange}
+                    className="p-1 rounded-lg text-slate-700 hover:text-black hover:bg-slate-100 transition cursor-pointer font-bold"
+                    title="Periodo successivo"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+
+                  <span className="hidden xl:inline text-xs font-semibold text-slate-500 ml-1">
+                    ({periodLabel})
+                  </span>
+                </div>
+              </div>
+
+              {/* FILTRI DI VISUALIZZAZIONE */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setOnlyDaysWithContent(!onlyDaysWithContent)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition cursor-pointer ${
+                    onlyDaysWithContent
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                  title="Se attivo, mostra e stampa solo le giornate che hanno appuntamenti o ferie"
+                >
+                  <Filter size={13} />
+                  {onlyDaysWithContent ? 'Solo giorni con impegni (Attivo)' : 'Tutti i giorni'}
                 </button>
 
-                <span className="hidden xl:inline text-xs font-semibold text-slate-500 ml-1">
-                  ({periodLabel})
-                </span>
-              </div>
-            </div>
-
-            {/* FILTRI DI VISUALIZZAZIONE */}
-            <div className="flex items-center gap-2">
-              {/* Toggle: Nascondi giorni vuoti per la stampa */}
-              <button
-                onClick={() => setOnlyDaysWithContent(!onlyDaysWithContent)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition cursor-pointer ${
-                  onlyDaysWithContent
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
-                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
-                }`}
-                title="Se attivo, mostra e stampa solo le giornate che hanno appuntamenti o ferie"
-              >
-                <Filter size={13} />
-                {onlyDaysWithContent ? 'Solo giorni con impegni (Attivo)' : 'Tutti i giorni'}
-              </button>
-
-              {/* Archivio Conclusi (VISIBILE ESCLUSIVAMENTE IN SEGRETERIA) */}
-              {isAdminUnlocked && (
                 <button
                   onClick={() => setShowConcluded(!showConcluded)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition cursor-pointer ${
@@ -736,23 +785,21 @@ export default function App() {
                   <Archive size={13} />
                   Conclusi ({concludedCount})
                 </button>
-              )}
-            </div>
+              </div>
 
-            {/* Ricerca Rapida Impegni o Ditte */}
-            <div className="relative flex-1 max-w-xs min-w-[200px]">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Cerca per impegno, ditta o contatto..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-950 text-slate-200 placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-amber-500 transition"
-              />
-            </div>
+              {/* Ricerca Rapida Impegni o Ditte */}
+              <div className="relative flex-1 max-w-xs min-w-[200px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cerca per impegno, ditta o contatto..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-950 text-slate-200 placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-amber-500 transition"
+                />
+              </div>
 
-            {/* Pulsanti per aggiunta appuntamenti (VISIBILI SOLO CON SEGRETERIA SBLOCCATA DA PIN) */}
-            {isAdminUnlocked && (
+              {/* Pulsanti per aggiunta appuntamenti (SEMPRE ATTIVI SU DESKTOP) */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
@@ -776,53 +823,53 @@ export default function App() {
                   <UserPlus size={15} /> Ferie / Assenza
                 </button>
               </div>
-            )}
+
+            </div>
+
+            {/* STRISCIA RAPIDA GIORNI CON APPUNTAMENTI EVIDENZIATI */}
+            <div className="max-w-7xl mx-auto mt-2 pt-2 border-t border-slate-800/60 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+                Impegni periodo:
+              </span>
+              {visibleDays.map((isoDay) => {
+                const count = appsCountByDate.get(isoDay) || 0;
+                const hasNotes = dailyNotes.some((n) => isoDay >= n.start_date && isoDay <= n.end_date);
+                const { dayName, dateStr } = formatDayTitle(isoDay);
+                const dayAbbr = dayName.slice(0, 3);
+                const dayNum = dateStr.split(' ')[0];
+                const isSelected = isoDay === startDateStr;
+
+                return (
+                  <button
+                    key={isoDay}
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById(`day-${isoDay}`);
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                    className={`px-2 py-1 rounded-lg border text-center shrink-0 transition cursor-pointer flex items-center gap-1 ${
+                      count > 0 || hasNotes
+                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 font-bold'
+                        : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                    } ${isSelected ? 'ring-2 ring-amber-400' : ''}`}
+                    title={`${dayName} ${dateStr}: ${count} appuntamenti`}
+                  >
+                    <span>{dayAbbr} {dayNum}</span>
+                    {count > 0 && (
+                      <span className="px-1 rounded-full text-[10px] font-black bg-amber-500 text-slate-950">
+                        {count}
+                      </span>
+                    )}
+                    {hasNotes && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
           </div>
-
-          {/* STRISCIA RAPIDA GIORNI CON APPUNTAMENTI EVIDENZIATI */}
-          <div className="max-w-7xl mx-auto mt-2 pt-2 border-t border-slate-800/60 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
-              Impegni periodo:
-            </span>
-            {visibleDays.map((isoDay) => {
-              const count = appsCountByDate.get(isoDay) || 0;
-              const hasNotes = dailyNotes.some((n) => isoDay >= n.start_date && isoDay <= n.end_date);
-              const { dayName, dateStr } = formatDayTitle(isoDay);
-              const dayAbbr = dayName.slice(0, 3);
-              const dayNum = dateStr.split(' ')[0];
-              const isSelected = isoDay === startDateStr;
-
-              return (
-                <button
-                  key={isoDay}
-                  type="button"
-                  onClick={() => {
-                    const el = document.getElementById(`day-${isoDay}`);
-                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }}
-                  className={`px-2 py-1 rounded-lg border text-center shrink-0 transition cursor-pointer flex items-center gap-1 ${
-                    count > 0 || hasNotes
-                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 font-bold'
-                      : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
-                  } ${isSelected ? 'ring-2 ring-amber-400' : ''}`}
-                  title={`${dayName} ${dateStr}: ${count} appuntamenti`}
-                >
-                  <span>{dayAbbr} {dayNum}</span>
-                  {count > 0 && (
-                    <span className="px-1 rounded-full text-[10px] font-black bg-amber-500 text-slate-950">
-                      {count}
-                    </span>
-                  )}
-                  {hasNotes && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-        </div>
+        )}
       </header>
 
       {/* ======================================================== */}
@@ -868,8 +915,8 @@ export default function App() {
                 .filter((a) => {
                   const matchesDate = a.date === isoDay;
                   if (!matchesDate) return false;
-                  if (!showConcluded && a.is_concluded) return false;
-                  if (!searchQuery.trim()) return true;
+                  if ((isMobileMode || !showConcluded) && a.is_concluded) return false;
+                  if (isMobileMode || !searchQuery.trim()) return true;
                   const q = searchQuery.toLowerCase();
                   return (
                     a.title.toLowerCase().includes(q) ||
@@ -890,13 +937,13 @@ export default function App() {
                   key={isoDay}
                   id={`day-${isoDay}`}
                   onDragOver={(e) => {
-                    if (!isAdminUnlocked || isMobileMode) return;
+                    if (!canEdit || isMobileMode) return;
                     e.preventDefault();
                     setDragOverDay(isoDay);
                   }}
                   onDragLeave={() => setDragOverDay(null)}
                   onDrop={(e) => {
-                    if (!isAdminUnlocked || isMobileMode) return;
+                    if (!canEdit || isMobileMode) return;
                     e.preventDefault();
                     handleDropOnDay(isoDay);
                     setDragOverDay(null);
@@ -924,15 +971,17 @@ export default function App() {
                       </span>
                     </div>
 
-                    {/* Bottone rapido aggiunta su giorno (SOLO SEGRETERIA SBLOCCATA) */}
-                    {isAdminUnlocked && (
+                    {/* Bottone rapido aggiunta su giorno */}
+                    {canEdit && (
                       <button
                         onClick={() => {
                           setEditingAppointment(null);
                           setModalDefaultDate(isoDay);
                           setIsAppModalOpen(true);
                         }}
-                        className="no-print opacity-0 group-hover:opacity-100 transition p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg text-xs flex items-center gap-1 font-semibold cursor-pointer"
+                        className={`no-print transition p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg text-xs flex items-center gap-1 font-semibold cursor-pointer ${
+                          isMobileMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
                         title="Aggiungi appuntamento in fondo a questa data"
                       >
                         <Plus size={14} /> Aggiungi
@@ -950,20 +999,20 @@ export default function App() {
                         >
                           <div
                             onClick={() => {
-                              if (isAdminUnlocked) {
+                              if (canEdit) {
                                 setEditingNote(note);
                                 setIsNoteModalOpen(true);
                               }
                             }}
                             className={`text-sky-600 print-sky font-medium text-sm sm:text-base flex items-center gap-1.5 ${
-                              isAdminUnlocked ? 'cursor-pointer hover:underline' : ''
+                              canEdit ? 'cursor-pointer hover:underline' : ''
                             }`}
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-sky-500 inline-block shrink-0" />
                             {note.note_text}
                           </div>
-                          {isAdminUnlocked && (
-                            <div className="no-print opacity-0 group-hover/note:opacity-100 transition flex gap-1">
+                          {canEdit && (
+                            <div className={`no-print transition flex gap-1 ${isMobileMode ? 'opacity-100' : 'opacity-0 group-hover/note:opacity-100'}`}>
                               <button
                                 onClick={() => {
                                   setEditingNote(note);
@@ -1021,7 +1070,7 @@ export default function App() {
                                 )}
                               </div>
 
-                              {/* Micro-Pulsanti per Google Calendar e Apple Calendar (.ics) + Gestione Segreteria se sbloccato */}
+                              {/* Micro-Pulsanti per Google Calendar e Apple Calendar (.ics) + Gestione Emergenza se sbloccato */}
                               <div className="flex items-center gap-1 shrink-0">
                                 {isAdminUnlocked && (
                                   <>
@@ -1093,20 +1142,17 @@ export default function App() {
                           /* ==================================================== */
                           <div
                             key={app.id}
-                            draggable={isAdminUnlocked && !isMobileMode}
+                            draggable={true}
                             onDragStart={(e) => {
-                              if (!isAdminUnlocked) return;
                               setDraggedAppId(app.id);
                               e.dataTransfer.setData('text/plain', app.id);
                               e.dataTransfer.effectAllowed = 'move';
                             }}
                             onDragOver={(e) => {
-                              if (!isAdminUnlocked) return;
                               e.preventDefault();
                               e.stopPropagation();
                             }}
                             onDrop={(e) => {
-                              if (!isAdminUnlocked) return;
                               e.preventDefault();
                               e.stopPropagation();
                               handleDropOnAppointment(app.id, isoDay);
@@ -1119,15 +1165,13 @@ export default function App() {
                             {/* Drag Handle + Orario + Sigla + Descrizione */}
                             <div className="flex flex-wrap sm:flex-nowrap items-baseline gap-x-2 sm:gap-x-4 min-w-0 flex-1">
                               
-                              {/* Grip Icon per Drag & Drop Desktop (solo se sbloccato) */}
-                              {isAdminUnlocked && (
-                                <span 
-                                  className="no-print opacity-0 group-hover/app:opacity-100 text-slate-300 hover:text-slate-600 cursor-grab shrink-0 self-center"
-                                  title="Trascina per riordinare o spostare di giorno"
-                                >
-                                  <GripVertical size={13} />
-                                </span>
-                              )}
+                              {/* Grip Icon per Drag & Drop Desktop */}
+                              <span 
+                                className="no-print opacity-0 group-hover/app:opacity-100 text-slate-300 hover:text-slate-600 cursor-grab shrink-0 self-center"
+                                title="Trascina per riordinare o spostare di giorno"
+                              >
+                                <GripVertical size={13} />
+                              </span>
 
                               {/* Orario / Fascia */}
                               <span className="text-base sm:text-lg font-medium text-slate-900 min-w-[95px] sm:min-w-[110px] shrink-0 flex items-center gap-1">
@@ -1182,72 +1226,70 @@ export default function App() {
                                 </span>
                               )}
 
-                              {/* AZIONI DESKTOP: Portineria + Concludi/Ripristina + Modifica + Elimina (SOLO SE SBLOCCATO) */}
-                              {isAdminUnlocked && (
-                                <div className="no-print opacity-0 group-hover/app:opacity-100 transition flex items-center gap-1">
-                                  
-                                  {/* Badge / Tasto Rapido Portineria */}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleToggleGatehouse(app.id, !app.for_gatehouse);
-                                    }}
-                                    className={`p-1 rounded-md transition cursor-pointer ${
-                                      app.for_gatehouse
-                                        ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 ring-1 ring-emerald-400'
-                                        : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100 opacity-60'
-                                    }`}
-                                    title={
-                                      app.for_gatehouse
-                                        ? 'Incluso nel foglio Portineria (clicca per rimuovere)'
-                                        : 'Non incluso in Portineria (clicca per includere)'
-                                    }
-                                  >
-                                    <ShieldCheck size={14} />
-                                  </button>
+                              {/* AZIONI DESKTOP: Portineria + Concludi/Ripristina + Modifica + Elimina */}
+                              <div className="no-print opacity-0 group-hover/app:opacity-100 transition flex items-center gap-1">
+                                
+                                {/* Badge / Tasto Rapido Portineria */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleGatehouse(app.id, !app.for_gatehouse);
+                                  }}
+                                  className={`p-1 rounded-md transition cursor-pointer ${
+                                    app.for_gatehouse
+                                      ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 ring-1 ring-emerald-400'
+                                      : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100 opacity-60'
+                                  }`}
+                                  title={
+                                    app.for_gatehouse
+                                      ? 'Incluso nel foglio Portineria (clicca per rimuovere)'
+                                      : 'Non incluso in Portineria (clicca per includere)'
+                                  }
+                                >
+                                  <ShieldCheck size={14} />
+                                </button>
 
-                                  {/* Tasto Rapido Concludi / Ripristina (Archivio) */}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleToggleConcluded(app.id, !app.is_concluded);
-                                    }}
-                                    className={`p-1 rounded-md transition cursor-pointer ${
-                                      app.is_concluded
-                                        ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                                        : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
-                                    }`}
-                                    title={
-                                      app.is_concluded
-                                        ? 'Ripristina in agenda attiva'
-                                        : 'Segna come concluso (nascondi dalla vista 2 settimane)'
-                                    }
-                                  >
-                                    {app.is_concluded ? <ArchiveRestore size={14} /> : <Check size={14} />}
-                                  </button>
+                                {/* Tasto Rapido Concludi / Ripristina (Archivio) */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleConcluded(app.id, !app.is_concluded);
+                                  }}
+                                  className={`p-1 rounded-md transition cursor-pointer ${
+                                    app.is_concluded
+                                      ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                      : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                                  }`}
+                                  title={
+                                    app.is_concluded
+                                      ? 'Ripristina in agenda attiva'
+                                      : 'Segna come concluso (nascondi dalla vista 2 settimane)'
+                                  }
+                                >
+                                  {app.is_concluded ? <ArchiveRestore size={14} /> : <Check size={14} />}
+                                </button>
 
-                                  <button
-                                    onClick={() => {
-                                      setEditingAppointment(app);
-                                      setIsAppModalOpen(true);
-                                    }}
-                                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
-                                    title="Modifica appuntamento"
-                                  >
-                                    <Edit2 size={14} />
-                                  </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingAppointment(app);
+                                    setIsAppModalOpen(true);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                                  title="Modifica appuntamento"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
 
-                                  <button
-                                    onClick={() => handleDeleteAppointment(app.id)}
-                                    className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
-                                    title="Elimina"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              )}
+                                <button
+                                  onClick={() => handleDeleteAppointment(app.id)}
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                                  title="Elimina"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
 
                             </div>
                           </div>
@@ -1269,26 +1311,28 @@ export default function App() {
           <div className="mt-8 pt-4 border-t border-slate-200 text-center text-xs text-slate-500 font-medium">
             <div>{CREDIT_LABEL}</div>
             
-            {/* Tasto discreto sblocco segreteria */}
-            <div className="no-print mt-3">
-              {!isAdminUnlocked ? (
-                <button
-                  type="button"
-                  onClick={() => setIsPinModalOpen(true)}
-                  className="text-[11px] text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 transition cursor-pointer"
-                >
-                  <Lock size={11} className="text-amber-500" /> Accesso Segreteria
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleLockAdmin}
-                  className="text-[11px] text-amber-700 hover:text-amber-800 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 transition cursor-pointer font-bold"
-                >
-                  <Unlock size={11} /> Esci da Segreteria
-                </button>
-              )}
-            </div>
+            {/* Tasto discreto sblocco segreteria (SOLO SU MOBILE) */}
+            {isMobileMode && (
+              <div className="no-print mt-3">
+                {!isAdminUnlocked ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsPinModalOpen(true)}
+                    className="text-[11px] text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 transition cursor-pointer"
+                  >
+                    <Lock size={11} className="text-amber-500" /> Accesso Segreteria
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleLockAdmin}
+                    className="text-[11px] text-amber-700 hover:text-amber-800 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 transition cursor-pointer font-bold"
+                  >
+                    <Unlock size={11} /> Blocca modifiche
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
         </div>
