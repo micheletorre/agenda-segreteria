@@ -14,8 +14,6 @@ import {
   BookUser,
   Share2,
   Calendar as CalendarIcon,
-  Smartphone,
-  LayoutDashboard,
   CalendarPlus,
   Building2,
   CheckCircle2,
@@ -58,21 +56,14 @@ export const SECRET_PIN = '1967';
 
 function isMobileInitial(): boolean {
   if (typeof window === 'undefined') return false;
-  // Se già sbloccato con PIN in questa sessione browser
-  if (sessionStorage.getItem('agenda_admin_unlocked') === 'true') {
-    return false;
-  }
   const search = window.location.search || '';
   const hash = window.location.hash || '';
   const hasMobileParam = (
     search.includes('vista=mobile') ||
-    search.includes('sola_lettura=true') ||
     hash.includes('vista=mobile') ||
     hash.includes('mobile')
   );
-  // Qualsiasi smartphone/tablet (larghezza schermo < 768px) entra SEMPRE in sola lettura
-  const isMobileScreen = window.innerWidth < 768;
-  return hasMobileParam || isMobileScreen;
+  return hasMobileParam || window.innerWidth < 768;
 }
 
 // Normalizzazione automatica delle sigle storiche
@@ -162,6 +153,15 @@ export default function App() {
   const [isContactsModalOpen, setIsContactsModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [isGatehouseModalOpen, setIsGatehouseModalOpen] = useState(false);
+
+  // Monitoraggio dinamico larghezza schermo (mobile vs desktop)
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileMode(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Caricamento e Realtime con Supabase
   useEffect(() => {
@@ -279,16 +279,14 @@ export default function App() {
     return appointments.filter((a) => a.is_concluded).length;
   }, [appointments]);
 
-      const handlePinSuccess = () => {
+  const handlePinSuccess = () => {
     sessionStorage.setItem('agenda_admin_unlocked', 'true');
     setIsAdminUnlocked(true);
-    setIsMobileMode(false);
   };
 
   const handleLockAdmin = () => {
     sessionStorage.removeItem('agenda_admin_unlocked');
     setIsAdminUnlocked(false);
-    setIsMobileMode(true);
   };
 
   // Handlers Navigazione Temporale a blocchi
@@ -537,79 +535,63 @@ export default function App() {
             </div>
           </div>
 
-          {/* Controllo Accesso Segreteria (PIN) / Selettore Vista */}
-          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800">
-            {isMobileMode ? (
-              isAdminUnlocked ? (
-                <button
-                  onClick={handleLockAdmin}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs cursor-pointer"
-                  title="Blocca modifiche e torna alla vista Sola Lettura"
-                >
-                  <Unlock size={14} /> Blocca / Sola Lettura
-                </button>
-              ) : (
-                <button
-                  onClick={() => setIsPinModalOpen(true)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-                  title="Sblocca modalità gestione tramite PIN"
-                >
-                  <Lock size={14} className="text-amber-400" /> Area Segreteria
-                </button>
-              )
+          {/* Controllo Accesso Segreteria (PIN) */}
+          <div className="flex items-center gap-2">
+            {!isAdminUnlocked ? (
+              <button
+                onClick={() => setIsPinModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 text-amber-300 bg-slate-950 hover:bg-slate-800 border border-amber-500/40 shadow-xs transition cursor-pointer"
+                title="Sblocca modalità gestione tramite PIN"
+              >
+                <Lock size={14} className="text-amber-400" /> Area Segreteria
+              </button>
             ) : (
-              <>
-                <button
-                  onClick={() => setIsMobileMode(false)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-slate-800 text-white shadow-xs cursor-pointer"
-                >
-                  <LayoutDashboard size={14} /> Gestione
-                </button>
-                <button
-                  onClick={handleLockAdmin}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition cursor-pointer"
-                  title="Torna in modalità sola lettura"
-                >
-                  <Smartphone size={14} /> Vista Lettore
-                </button>
-              </>
+              <button
+                onClick={handleLockAdmin}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-amber-500 text-slate-950 hover:bg-amber-400 font-black shadow-md transition cursor-pointer"
+                title="Esci dalla gestione e torna alla modalità sola lettura"
+              >
+                <Unlock size={14} /> Esci da Segreteria
+              </button>
             )}
           </div>
 
-          {/* Azioni Rapide Barra Superiore */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsContactsModalOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
-              title="Apri Rubrica Anagrafica"
-            >
-              <BookUser size={14} className="text-blue-400" /> Anagrafica ({contacts.length})
-            </button>
+          {/* Azioni Rapide Barra Superiore (VISIBILI ESCLUSIVAMENTE DOPO SBLOCCO CON PIN SEGRETERIA) */}
+          {isAdminUnlocked && (
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800">
+              <button
+                onClick={() => setIsContactsModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                title="Apri Rubrica Anagrafica"
+              >
+                <BookUser size={14} className="text-blue-400" /> Anagrafica ({contacts.length})
+              </button>
 
-            <button
-              onClick={() => setIsGatehouseModalOpen(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-              title="Apri e stampa Foglio Portineria A4 per gli accessi del giorno"
-            >
-              <ShieldCheck size={14} /> Foglio Portineria
-            </button>
+              <button
+                onClick={() => setIsGatehouseModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                title="Apri e stampa Foglio Portineria A4 per gli accessi del giorno"
+              >
+                <ShieldCheck size={14} /> Foglio Portineria
+              </button>
 
-            <button
-              onClick={() => setIsShareModalOpen(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-              title="Condivisione serale con PDF per Mail, WhatsApp e SMS"
-            >
-              <Share2 size={14} /> Condividi Sera
-            </button>
+              <button
+                onClick={() => setIsShareModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                title="Condivisione serale con PDF per Mail, WhatsApp e SMS"
+              >
+                <Share2 size={14} /> Condividi Sera
+              </button>
 
-            <button
-              onClick={handleExecutePrint}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-white text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-              title="Stampa diretta del periodo selezionato (A4 Montserrat)"
-            >
-              <Printer size={14} /> Stampa A4
-            </button>
-          </div>
+              <button
+                onClick={handleExecutePrint}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-white text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                title="Stampa diretta del periodo selezionato (A4 Montserrat)"
+              >
+                <Printer size={14} /> Stampa A4
+              </button>
+            </div>
+          )}
 
         </div>
 
@@ -706,7 +688,7 @@ export default function App() {
                   title={`Imposta data fine fino all'ultimo appuntamento inserito (${latestAppointmentDate})`}
                 >
                   <span>Fine Agenda</span>
-                  <span className="text-[10px] opacity-80">(${latestAppointmentDate.split('-').slice(1).reverse().join('/')})</span>
+                  <span className="text-[10px] opacity-80">({latestAppointmentDate.split('-').slice(1).reverse().join('/')})</span>
                 </button>
 
                 <button
@@ -740,19 +722,21 @@ export default function App() {
                 {onlyDaysWithContent ? 'Solo giorni con impegni (Attivo)' : 'Tutti i giorni'}
               </button>
 
-              {/* Archivio Conclusi */}
-              <button
-                onClick={() => setShowConcluded(!showConcluded)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition cursor-pointer ${
-                  showConcluded
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs'
-                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
-                }`}
-                title="Mostra gli appuntamenti conclusi/depubblicati"
-              >
-                <Archive size={13} />
-                Conclusi ({concludedCount})
-              </button>
+              {/* Archivio Conclusi (VISIBILE ESCLUSIVAMENTE IN SEGRETERIA) */}
+              {isAdminUnlocked && (
+                <button
+                  onClick={() => setShowConcluded(!showConcluded)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition cursor-pointer ${
+                    showConcluded
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                  title="Mostra gli appuntamenti conclusi/depubblicati"
+                >
+                  <Archive size={13} />
+                  Conclusi ({concludedCount})
+                </button>
+              )}
             </div>
 
             {/* Ricerca Rapida Impegni o Ditte */}
@@ -767,8 +751,8 @@ export default function App() {
               />
             </div>
 
-            {/* Pulsanti per aggiunta appuntamenti (nascosti in modalità mobile di sola lettura) */}
-            {!isMobileMode && (
+            {/* Pulsanti per aggiunta appuntamenti (VISIBILI SOLO CON SEGRETERIA SBLOCCATA DA PIN) */}
+            {isAdminUnlocked && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
@@ -906,13 +890,13 @@ export default function App() {
                   key={isoDay}
                   id={`day-${isoDay}`}
                   onDragOver={(e) => {
-                    if (isMobileMode) return;
+                    if (!isAdminUnlocked || isMobileMode) return;
                     e.preventDefault();
                     setDragOverDay(isoDay);
                   }}
                   onDragLeave={() => setDragOverDay(null)}
                   onDrop={(e) => {
-                    if (isMobileMode) return;
+                    if (!isAdminUnlocked || isMobileMode) return;
                     e.preventDefault();
                     handleDropOnDay(isoDay);
                     setDragOverDay(null);
@@ -940,8 +924,8 @@ export default function App() {
                       </span>
                     </div>
 
-                    {/* Bottone rapido aggiunta su giorno */}
-                    {!isMobileMode && (
+                    {/* Bottone rapido aggiunta su giorno (SOLO SEGRETERIA SBLOCCATA) */}
+                    {isAdminUnlocked && (
                       <button
                         onClick={() => {
                           setEditingAppointment(null);
@@ -966,19 +950,19 @@ export default function App() {
                         >
                           <div
                             onClick={() => {
-                              if (!isMobileMode) {
+                              if (isAdminUnlocked) {
                                 setEditingNote(note);
                                 setIsNoteModalOpen(true);
                               }
                             }}
                             className={`text-sky-600 print-sky font-medium text-sm sm:text-base flex items-center gap-1.5 ${
-                              !isMobileMode ? 'cursor-pointer hover:underline' : ''
+                              isAdminUnlocked ? 'cursor-pointer hover:underline' : ''
                             }`}
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-sky-500 inline-block shrink-0" />
                             {note.note_text}
                           </div>
-                          {!isMobileMode && (
+                          {isAdminUnlocked && (
                             <div className="no-print opacity-0 group-hover/note:opacity-100 transition flex gap-1">
                               <button
                                 onClick={() => {
@@ -1037,8 +1021,31 @@ export default function App() {
                                 )}
                               </div>
 
-                              {/* Micro-Pulsanti per Google Calendar e Apple Calendar (.ics) */}
+                              {/* Micro-Pulsanti per Google Calendar e Apple Calendar (.ics) + Gestione Segreteria se sbloccato */}
                               <div className="flex items-center gap-1 shrink-0">
+                                {isAdminUnlocked && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingAppointment(app);
+                                        setIsAppModalOpen(true);
+                                      }}
+                                      className="px-2 py-0.5 rounded-md bg-blue-600 text-white hover:bg-blue-500 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                                      title="Modifica appuntamento"
+                                    >
+                                      <Edit2 size={11} /> Modifica
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteAppointment(app.id)}
+                                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                                      title="Elimina"
+                                    >
+                                      <Trash2 size={11} />
+                                    </button>
+                                  </>
+                                )}
                                 <a
                                   href={getGoogleCalendarUrl(app)}
                                   target="_blank"
@@ -1049,6 +1056,7 @@ export default function App() {
                                   <CalendarPlus size={11} /> Google
                                 </a>
                                 <button
+                                  type="button"
                                   onClick={() => downloadICS(app)}
                                   className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
                                   title="Scarica iCal / Apple"
@@ -1085,17 +1093,20 @@ export default function App() {
                           /* ==================================================== */
                           <div
                             key={app.id}
-                            draggable={!isMobileMode}
+                            draggable={isAdminUnlocked && !isMobileMode}
                             onDragStart={(e) => {
+                              if (!isAdminUnlocked) return;
                               setDraggedAppId(app.id);
                               e.dataTransfer.setData('text/plain', app.id);
                               e.dataTransfer.effectAllowed = 'move';
                             }}
                             onDragOver={(e) => {
+                              if (!isAdminUnlocked) return;
                               e.preventDefault();
                               e.stopPropagation();
                             }}
                             onDrop={(e) => {
+                              if (!isAdminUnlocked) return;
                               e.preventDefault();
                               e.stopPropagation();
                               handleDropOnAppointment(app.id, isoDay);
@@ -1108,13 +1119,15 @@ export default function App() {
                             {/* Drag Handle + Orario + Sigla + Descrizione */}
                             <div className="flex flex-wrap sm:flex-nowrap items-baseline gap-x-2 sm:gap-x-4 min-w-0 flex-1">
                               
-                              {/* Grip Icon per Drag & Drop Desktop */}
-                              <span 
-                                className="no-print opacity-0 group-hover/app:opacity-100 text-slate-300 hover:text-slate-600 cursor-grab shrink-0 self-center"
-                                title="Trascina per riordinare o spostare di giorno"
-                              >
-                                <GripVertical size={13} />
-                              </span>
+                              {/* Grip Icon per Drag & Drop Desktop (solo se sbloccato) */}
+                              {isAdminUnlocked && (
+                                <span 
+                                  className="no-print opacity-0 group-hover/app:opacity-100 text-slate-300 hover:text-slate-600 cursor-grab shrink-0 self-center"
+                                  title="Trascina per riordinare o spostare di giorno"
+                                >
+                                  <GripVertical size={13} />
+                                </span>
+                              )}
 
                               {/* Orario / Fascia */}
                               <span className="text-base sm:text-lg font-medium text-slate-900 min-w-[95px] sm:min-w-[110px] shrink-0 flex items-center gap-1">
@@ -1169,70 +1182,72 @@ export default function App() {
                                 </span>
                               )}
 
-                              {/* AZIONI DESKTOP: Portineria + Concludi/Ripristina + Modifica + Elimina */}
-                              <div className="no-print opacity-0 group-hover/app:opacity-100 transition flex items-center gap-1">
-                                
-                                {/* Badge / Tasto Rapido Portineria */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleToggleGatehouse(app.id, !app.for_gatehouse);
-                                  }}
-                                  className={`p-1 rounded-md transition cursor-pointer ${
-                                    app.for_gatehouse
-                                      ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 ring-1 ring-emerald-400'
-                                      : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100 opacity-60'
-                                  }`}
-                                  title={
-                                    app.for_gatehouse
-                                      ? 'Incluso nel foglio Portineria (clicca per rimuovere)'
-                                      : 'Non incluso in Portineria (clicca per includere)'
-                                  }
-                                >
-                                  <ShieldCheck size={14} />
-                                </button>
+                              {/* AZIONI DESKTOP: Portineria + Concludi/Ripristina + Modifica + Elimina (SOLO SE SBLOCCATO) */}
+                              {isAdminUnlocked && (
+                                <div className="no-print opacity-0 group-hover/app:opacity-100 transition flex items-center gap-1">
+                                  
+                                  {/* Badge / Tasto Rapido Portineria */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleGatehouse(app.id, !app.for_gatehouse);
+                                    }}
+                                    className={`p-1 rounded-md transition cursor-pointer ${
+                                      app.for_gatehouse
+                                        ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 ring-1 ring-emerald-400'
+                                        : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100 opacity-60'
+                                    }`}
+                                    title={
+                                      app.for_gatehouse
+                                        ? 'Incluso nel foglio Portineria (clicca per rimuovere)'
+                                        : 'Non incluso in Portineria (clicca per includere)'
+                                    }
+                                  >
+                                    <ShieldCheck size={14} />
+                                  </button>
 
-                                {/* Tasto Rapido Concludi / Ripristina (Archivio) */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleToggleConcluded(app.id, !app.is_concluded);
-                                  }}
-                                  className={`p-1 rounded-md transition cursor-pointer ${
-                                    app.is_concluded
-                                      ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                                      : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
-                                  }`}
-                                  title={
-                                    app.is_concluded
-                                      ? 'Ripristina in agenda attiva'
-                                      : 'Segna come concluso (nascondi dalla vista 2 settimane)'
-                                  }
-                                >
-                                  {app.is_concluded ? <ArchiveRestore size={14} /> : <Check size={14} />}
-                                </button>
+                                  {/* Tasto Rapido Concludi / Ripristina (Archivio) */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleConcluded(app.id, !app.is_concluded);
+                                    }}
+                                    className={`p-1 rounded-md transition cursor-pointer ${
+                                      app.is_concluded
+                                        ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                        : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                                    }`}
+                                    title={
+                                      app.is_concluded
+                                        ? 'Ripristina in agenda attiva'
+                                        : 'Segna come concluso (nascondi dalla vista 2 settimane)'
+                                    }
+                                  >
+                                    {app.is_concluded ? <ArchiveRestore size={14} /> : <Check size={14} />}
+                                  </button>
 
-                                <button
-                                  onClick={() => {
-                                    setEditingAppointment(app);
-                                    setIsAppModalOpen(true);
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
-                                  title="Modifica appuntamento"
-                                >
-                                  <Edit2 size={14} />
-                                </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingAppointment(app);
+                                      setIsAppModalOpen(true);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                                    title="Modifica appuntamento"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
 
-                                <button
-                                  onClick={() => handleDeleteAppointment(app.id)}
-                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
-                                  title="Elimina"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
+                                  <button
+                                    onClick={() => handleDeleteAppointment(app.id)}
+                                    className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                                    title="Elimina"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              )}
 
                             </div>
                           </div>
@@ -1254,28 +1269,26 @@ export default function App() {
           <div className="mt-8 pt-4 border-t border-slate-200 text-center text-xs text-slate-500 font-medium">
             <div>{CREDIT_LABEL}</div>
             
-            {/* Tasto discreto sblocco segreteria su mobile */}
-            {isMobileMode && (
-              <div className="no-print mt-3">
-                {!isAdminUnlocked ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsPinModalOpen(true)}
-                    className="text-[11px] text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 transition cursor-pointer"
-                  >
-                    <Lock size={11} className="text-amber-500" /> Accesso Segreteria
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleLockAdmin}
-                    className="text-[11px] text-amber-700 hover:text-amber-800 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 transition cursor-pointer font-bold"
-                  >
-                    <Unlock size={11} /> Esci da Gestione
-                  </button>
-                )}
-              </div>
-            )}
+            {/* Tasto discreto sblocco segreteria */}
+            <div className="no-print mt-3">
+              {!isAdminUnlocked ? (
+                <button
+                  type="button"
+                  onClick={() => setIsPinModalOpen(true)}
+                  className="text-[11px] text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 transition cursor-pointer"
+                >
+                  <Lock size={11} className="text-amber-500" /> Accesso Segreteria
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleLockAdmin}
+                  className="text-[11px] text-amber-700 hover:text-amber-800 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 transition cursor-pointer font-bold"
+                >
+                  <Unlock size={11} /> Esci da Segreteria
+                </button>
+              )}
+            </div>
           </div>
 
         </div>
