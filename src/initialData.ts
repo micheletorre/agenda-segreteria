@@ -9,7 +9,7 @@ export const INITIAL_CONTACTS: Contact[] = [
     phone: '+39 06 1234567',
     email: 'canestrari@studio.it',
     company: 'Consulenze Mediche',
-    notes: 'Referente MC'
+    notes: 'Referente Monte Citorio'
   },
   {
     id: 'cont-2',
@@ -49,19 +49,58 @@ export const INITIAL_CONTACTS: Contact[] = [
     name: 'Ricci F.',
     company: 'Impresa Edile',
     notes: 'Sopralluoghi e pittura'
+  },
+  // Nuovi contatti e riferimenti richiesti
+  {
+    id: 'cont-7',
+    name: 'Milano V.',
+    company: 'Studio Milano',
+    notes: 'Riferimento interno'
+  },
+  {
+    id: 'cont-8',
+    name: 'Torre M.',
+    company: 'Consulenza Direzione',
+    notes: 'Riferimento interno'
+  },
+  {
+    id: 'cont-9',
+    name: 'Ferrante R.',
+    company: 'Studio Ferrante',
+    notes: 'Riferimento interno'
+  },
+  {
+    id: 'cont-10',
+    name: 'Ricci A.',
+    company: 'Gestione Immobili',
+    notes: 'Riferimento interno'
+  },
+  {
+    id: 'cont-11',
+    title: 'Geom.',
+    name: 'Paolini D.',
+    company: 'Studio Tecnico',
+    notes: 'Referente tecnico'
+  },
+  {
+    id: 'cont-12',
+    title: 'Avv.',
+    name: 'Bonazzi',
+    company: 'Studio Legale Bonazzi',
+    notes: 'Consulenza Legale'
   }
 ];
 
-// Appuntamenti base con flag per_portineria
+// Appuntamenti base con flag per_portineria e sedi aggiornate
 const BASE_APPOINTMENTS: Appointment[] = [
   // Mercoledì 04 novembre
   {
     id: 'app-1',
     date: '2026-11-04',
     time_label: 'in mattinata',
-    referent: 'MC',
+    referent: 'Monte Citorio',
     title: 'DLG impianti per inversione stagionale CDZ',
-    side_note: '(Paolini)',
+    side_note: '(Geom. Paolini D.)',
     category: 'standard',
     for_gatehouse: true,
   },
@@ -69,7 +108,7 @@ const BASE_APPOINTMENTS: Appointment[] = [
     id: 'app-2',
     date: '2026-11-04',
     time_label: 'h 10.00',
-    referent: 'MC',
+    referent: 'Monte Citorio',
     title: 'AU riceve D.ssa Canestrari',
     category: 'internal_red',
     for_gatehouse: true,
@@ -78,9 +117,9 @@ const BASE_APPOINTMENTS: Appointment[] = [
     id: 'app-3',
     date: '2026-11-04',
     time_label: 'h 10.00',
-    referent: 'Giulia',
+    referent: 'Via Giulia',
     title: 'sopralluogo bagni e pittura',
-    side_note: '(Ricci F.)',
+    side_note: '(Ricci A.)',
     category: 'standard',
     for_gatehouse: false,
   },
@@ -88,9 +127,9 @@ const BASE_APPOINTMENTS: Appointment[] = [
     id: 'app-4',
     date: '2026-11-04',
     time_label: 'a seguire',
-    referent: 'Risorg',
+    referent: 'Risorgimento',
     title: 'sopralluogo bagni e pittura',
-    side_note: '(Ricci F.)',
+    side_note: '(Ricci A.)',
     category: 'standard',
     for_gatehouse: false,
   },
@@ -100,7 +139,7 @@ const BASE_APPOINTMENTS: Appointment[] = [
     id: 'app-5',
     date: '2026-11-05',
     time_label: 'h 10.00',
-    referent: 'MC',
+    referent: 'Monte Citorio',
     title: 'AU riceve Dott. Nitoglia',
     category: 'internal_red',
     for_gatehouse: true,
@@ -111,7 +150,7 @@ const BASE_APPOINTMENTS: Appointment[] = [
     id: 'app-6',
     date: '2026-11-06',
     time_label: 'h 10.00',
-    referent: 'MC',
+    referent: 'Monte Citorio',
     title: 'AU riceve D.ssa Canestrari',
     category: 'internal_red',
     for_gatehouse: true,
@@ -133,7 +172,7 @@ const BASE_APPOINTMENTS: Appointment[] = [
     id: 'app-8',
     date: '2026-11-10',
     time_label: 'h 10.00',
-    referent: 'MC',
+    referent: 'Monte Citorio',
     title: 'AU riceve Dott. Nitoglia',
     category: 'internal_red',
     for_gatehouse: true,
@@ -155,7 +194,7 @@ const BASE_APPOINTMENTS: Appointment[] = [
     id: 'app-10',
     date: '2026-11-12',
     time_label: 'h 10.00',
-    referent: 'MC',
+    referent: 'Monte Citorio',
     title: 'AU riceve Dott. Nitoglia',
     category: 'internal_red',
     for_gatehouse: true,
@@ -166,7 +205,7 @@ const BASE_APPOINTMENTS: Appointment[] = [
     id: 'app-11',
     date: '2026-11-13',
     time_label: 'h 10.00',
-    referent: 'MC',
+    referent: 'Monte Citorio',
     title: 'AU riceve D.ssa Canestrari',
     category: 'internal_red',
     for_gatehouse: true,
@@ -195,21 +234,28 @@ const BASE_APPOINTMENTS: Appointment[] = [
   },
 ];
 
-// Generazione id univoci per i dati storici Excel (evitando duplicati su date già coperte da app-1...app-6)
+// Generazione id univoci per i dati storici Excel (convertendo MC -> Monte Citorio)
 const historicalMapped: Appointment[] = HISTORICAL_EXCEL_DATA
   .filter((h) => h.date < '2026-11-04')
-  .map((h, i) => ({
-    id: `app-hist-${i + 1}`,
-    date: h.date,
-    time_label: h.time_label,
-    order_index: i,
-    referent: h.referent || '',
-    title: h.title,
-    category: h.category,
-    side_note: h.side_note || '',
-    location: h.location || '',
-    for_gatehouse: true,
-  }));
+  .map((h, i) => {
+    let ref = h.referent || '';
+    if (ref === 'MC') ref = 'Monte Citorio';
+    if (ref === 'Giulia') ref = 'Via Giulia';
+    if (ref === 'Risorg') ref = 'Risorgimento';
+
+    return {
+      id: `app-hist-${i + 1}`,
+      date: h.date,
+      time_label: h.time_label,
+      order_index: i,
+      referent: ref,
+      title: h.title,
+      category: h.category,
+      side_note: h.side_note || '',
+      location: h.location || '',
+      for_gatehouse: true,
+    };
+  });
 
 export const INITIAL_APPOINTMENTS: Appointment[] = [
   ...historicalMapped,

@@ -34,7 +34,7 @@ import {
   formatDayTitle, 
   formatHeaderDate, 
   formatTimestamp, 
-  getDaysRange, 
+  getDaysBetween,
   parseISODate,
   toISODate 
 } from './utils/dateUtils';
@@ -44,7 +44,6 @@ import { AppointmentModal } from './components/AppointmentModal';
 import { DailyNoteModal } from './components/DailyNoteModal';
 import { ContactsModal } from './components/ContactsModal';
 import { ShareModal } from './components/ShareModal';
-import { PrintModal } from './components/PrintModal';
 import { GatehouseModal } from './components/GatehouseModal';
 
 // Nome applicazione configurabile (pronto per essere personalizzato su indicazione della segreteria)
@@ -64,6 +63,24 @@ function isMobileRouteRequested(): boolean {
   );
 }
 
+// Normalizzazione automatica delle sigle storiche
+function normalizeReferents(list: Appointment[]): { changed: boolean; updated: Appointment[] } {
+  let changed = false;
+  const updated = list.map((a) => {
+    let ref = a.referent || '';
+    let mod = false;
+    if (ref === 'MC') { ref = 'Monte Citorio'; mod = true; }
+    else if (ref === 'Giulia') { ref = 'Via Giulia'; mod = true; }
+    else if (ref === 'Risorg') { ref = 'Risorgimento'; mod = true; }
+    if (mod) {
+      changed = true;
+      return { ...a, referent: ref };
+    }
+    return a;
+  });
+  return { changed, updated };
+}
+
 export default function App() {
   // Modalità di visualizzazione: Gestione (desktop) vs Consultazione (mobile / sola lettura)
   const [isMobileMode, setIsMobileMode] = useState<boolean>(() => isMobileRouteRequested());
@@ -71,7 +88,9 @@ export default function App() {
   // Data e Appuntamenti (con fallback localStorage)
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
     const saved = localStorage.getItem('agenda_appointments');
-    return saved ? JSON.parse(saved) : INITIAL_APPOINTMENTS;
+    const list = saved ? JSON.parse(saved) : INITIAL_APPOINTMENTS;
+    const { updated } = normalizeReferents(list);
+    return updated;
   });
 
   const [dailyNotes, setDailyNotes] = useState<DailyNote[]>(() => {
@@ -87,6 +106,7 @@ export default function App() {
   const [lastUpdateDate, setLastUpdateDate] = useState<Date>(new Date());
 
   // Visualizzazione e navigazione (default dinamico alla data odierna)
+    // Visualizzazione e navigazione tramite intervallo continuo "Da ... A ..."
   const [startDateStr, setStartDateStr] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
@@ -98,8 +118,13 @@ export default function App() {
     return toISODate(new Date());
   });
 
-  const [daysCount, setDaysCount] = useState<number>(14); // 14 giorni predefiniti (2 pagine A4 fronte/retro)
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [endDateStr, setEndDateStr] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 13);
+    return toISODate(d);
+  });
+
+    const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Filtri vista
   const [onlyDaysWithContent, setOnlyDaysWithContent] = useState<boolean>(true); // Nasconde giorni vuoti
@@ -119,8 +144,7 @@ export default function App() {
 
   const [isContactsModalOpen, setIsContactsModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [isGatehouseModalOpen, setIsGatehouseModalOpen] = useState(false);
+    const [isGatehouseModalOpen, setIsGatehouseModalOpen] = useState(false);
 
   // Caricamento e Realtime con Supabase
   useEffect(() => {
@@ -131,8 +155,16 @@ export default function App() {
       try {
         const { data: appsData } = await client.from('appointments').select('*').order('date', { ascending: true });
         if (appsData && appsData.length > 0) {
-          setAppointments(appsData);
-          localStorage.setItem('agenda_appointments', JSON.stringify(appsData));
+          const { changed, updated } = normalizeReferents(appsData);
+          setAppointments(updated);
+          localStorage.setItem('agenda_appointments', JSON.stringify(updated));
+          if (changed) {
+            for (const app of updated) {
+              if (app.referent === 'Monte Citorio' || app.referent === 'Via Giulia' || app.referent === 'Risorgimento') {
+                await client.from('appointments').upsert(app);
+              }
+            }
+          }
         }
 
         const { data: notesData } = await client.from('daily_notes').select('*').order('start_date', { ascending: true });
@@ -187,10 +219,18 @@ export default function App() {
     localStorage.setItem('agenda_contacts', JSON.stringify(contacts));
   }, [contacts]);
 
-  // Lista base dei giorni nel range (es. 14 giorni)
+    // Calcola la data dell'ultimo appuntamento inserito nel database
+  const latestAppointmentDate = useMemo(() => {
+    if (appointments.length === 0) return startDateStr;
+    return appointments.reduce((max, a) => (a.date > max ? a.date : max), startDateStr);
+  }, [appointments, startDateStr]);
+
+  // Lista base dei giorni nell'intervallo continuo selezionato
   const visibleDays = useMemo(() => {
-    return getDaysRange(startDateStr, daysCount);
-  }, [startDateStr, daysCount]);
+    return getDaysBetween(startDateStr, endDateStr);
+  }, [startDateStr, endDateStr]);
+
+  const daysCount = visibleDays.length;
 
   // Mappa del numero di appuntamenti per data (per evidenziare il calendario)
   const appsCountByDate = useMemo(() => {
@@ -222,27 +262,25 @@ export default function App() {
     return appointments.filter((a) => a.is_concluded).length;
   }, [appointments]);
 
-  // Handlers Navigazione Temporale
+    // Handlers Navigazione Temporale a blocchi
   const handlePrevRange = () => {
-    const d = parseISODate(startDateStr);
-    d.setDate(d.getDate() - daysCount);
-    setStartDateStr(toISODate(d));
+    const diff = Math.max(1, daysCount);
+    const s = parseISODate(startDateStr);
+    s.setDate(s.getDate() - diff);
+    const e = parseISODate(endDateStr);
+    e.setDate(e.getDate() - diff);
+    setStartDateStr(toISODate(s));
+    setEndDateStr(toISODate(e));
   };
 
   const handleNextRange = () => {
-    const d = parseISODate(startDateStr);
-    d.setDate(d.getDate() + daysCount);
-    setStartDateStr(toISODate(d));
-  };
-
-  const handleToday = () => {
-    setStartDateStr(toISODate(new Date()));
-  };
-
-  const handleDirectDatePick = (isoDate: string) => {
-    if (isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
-      setStartDateStr(isoDate);
-    }
+    const diff = Math.max(1, daysCount);
+    const s = parseISODate(startDateStr);
+    s.setDate(s.getDate() + diff);
+    const e = parseISODate(endDateStr);
+    e.setDate(e.getDate() + diff);
+    setStartDateStr(toISODate(s));
+    setEndDateStr(toISODate(e));
   };
 
   // CRUD Appuntamenti con posizionamento in basso e salvataggio
@@ -418,21 +456,13 @@ export default function App() {
     window.print();
   };
 
-  const handleApplyAndPrint = (fromIso: string, count: number) => {
-    setStartDateStr(fromIso);
-    setDaysCount(count);
-    setTimeout(() => {
-      window.print();
-    }, 150);
-  };
-
+  
   // Calcolo etichetta periodo corrente per l'header
   const periodLabel = useMemo(() => {
     const s = parseISODate(startDateStr);
-    const e = new Date(s);
-    e.setDate(s.getDate() + (daysCount - 1));
+    const e = parseISODate(endDateStr);
     return `${formatHeaderDate(s)} — ${formatHeaderDate(e)}`;
-  }, [startDateStr, daysCount]);
+  }, [startDateStr, endDateStr]);
 
   return (
     <div className={`min-h-screen antialiased pb-16 print:bg-white print:text-black print:p-0 print:pb-0 ${
@@ -529,9 +559,9 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setIsPrintModalOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-white text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-              title="Configura e stampa il foglio A4"
+              onClick={handleExecutePrint}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-white text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+              title="Stampa diretta del periodo selezionato (A4 Montserrat)"
             >
               <Printer size={14} /> Stampa A4
             </button>
@@ -545,57 +575,109 @@ export default function App() {
         <div className="bg-slate-950 border-t border-slate-800/80 px-4 py-2.5">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
             
-            {/* SELETTORE DATE LUMINOSO E AD ALTO CONTRASTO */}
-            <div className="flex items-center gap-2 bg-white text-slate-900 px-3 py-1.5 rounded-xl border-2 border-amber-500 shadow-sm">
+            {/* SELETTORE DATE AD ALTO CONTRASTO "DA ... A ..." CON PULSANTE FINE AGENDa */}
+            <div className="flex items-center gap-2 bg-white text-slate-900 px-3 py-1.5 rounded-xl border-2 border-amber-500 shadow-sm flex-wrap">
               <CalendarIcon size={16} className="text-amber-600 shrink-0" />
-              
+
               <button
+                type="button"
                 onClick={handlePrevRange}
                 className="p-1 rounded-lg text-slate-700 hover:text-black hover:bg-slate-100 transition cursor-pointer font-bold"
                 title="Periodo precedente"
               >
                 <ChevronLeft size={16} />
               </button>
+              
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-700">Da:</span>
+                <input
+                  type="date"
+                  value={startDateStr}
+                  onChange={(e) => {
+                    setStartDateStr(e.target.value);
+                    if (e.target.value > endDateStr) setEndDateStr(e.target.value);
+                  }}
+                  className="bg-slate-100 text-slate-950 border border-slate-300 text-xs font-bold px-2 py-1 rounded-lg focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                  title="Data inizio visualizzazione"
+                />
+              </div>
 
-              <button
-                onClick={handleToday}
-                className="px-2.5 py-0.5 rounded-lg text-xs font-black bg-amber-500 text-slate-950 hover:bg-amber-400 transition cursor-pointer shadow-xs"
-                title="Salta alla data odierna"
-              >
-                Oggi
-              </button>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-700">A:</span>
+                <input
+                  type="date"
+                  value={endDateStr}
+                  min={startDateStr}
+                  onChange={(e) => setEndDateStr(e.target.value)}
+                  className="bg-slate-100 text-slate-950 border border-slate-300 text-xs font-bold px-2 py-1 rounded-lg focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                  title="Data fine visualizzazione"
+                />
+              </div>
 
-              {/* Input Date ad Alta Visibilità */}
-              <input
-                type="date"
-                value={startDateStr}
-                onChange={(e) => handleDirectDatePick(e.target.value)}
-                className="bg-slate-100 text-slate-950 border border-slate-300 text-xs font-bold px-2 py-1 rounded-lg focus:ring-2 focus:ring-amber-500 cursor-pointer"
-                title="Seleziona data di partenza dell'agenda"
-              />
+              <div className="h-4 w-px bg-slate-300 mx-1 hidden sm:block" />
 
-              <button
-                onClick={handleNextRange}
-                className="p-1 rounded-lg text-slate-700 hover:text-black hover:bg-slate-100 transition cursor-pointer font-bold"
-                title="Periodo successivo"
-              >
-                <ChevronRight size={16} />
-              </button>
+              {/* Scorciatoie Rapide */}
+              <div className="flex items-center gap-1 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = toISODate(new Date());
+                    setStartDateStr(today);
+                    setEndDateStr(today);
+                  }}
+                  className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
+                >
+                  Oggi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const s = parseISODate(startDateStr);
+                    const e = new Date(s);
+                    e.setDate(e.getDate() + 13);
+                    setEndDateStr(toISODate(e));
+                  }}
+                  className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
+                >
+                  +14 Giorni
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const s = parseISODate(startDateStr);
+                    const e = new Date(s);
+                    e.setDate(e.getDate() + 30);
+                    setEndDateStr(toISODate(e));
+                  }}
+                  className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
+                >
+                  +1 Mese
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEndDateStr(latestAppointmentDate);
+                  }}
+                  className="px-2.5 py-0.5 rounded-lg text-xs font-black bg-amber-500 text-slate-950 hover:bg-amber-400 transition cursor-pointer shadow-xs flex items-center gap-1"
+                  title={`Imposta data fine fino all'ultimo appuntamento inserito (${latestAppointmentDate})`}
+                >
+                  <span>Fine Agenda</span>
+                  <span className="text-[10px] opacity-80">(${latestAppointmentDate.split('-').slice(1).reverse().join('/')})</span>
+                </button>
 
-              <div className="h-4 w-px bg-slate-300 mx-1" />
+                <button
+                  type="button"
+                  onClick={handleNextRange}
+                  className="p-1 rounded-lg text-slate-700 hover:text-black hover:bg-slate-100 transition cursor-pointer font-bold"
+                  title="Periodo successivo"
+                >
+                  <ChevronRight size={16} />
+                </button>
 
-              <select
-                value={daysCount}
-                onChange={(e) => setDaysCount(Number(e.target.value))}
-                className="bg-transparent text-xs font-bold text-slate-800 focus:outline-hidden cursor-pointer"
-              >
-                <option value={7}>7 giorni (1 facciata A4)</option>
-                <option value={14}>14 giorni (2 facciate A4)</option>
-                <option value={28}>28 giorni (1 mese)</option>
-              </select>
-              <span className="hidden xl:inline text-[11px] font-semibold text-slate-500 shrink-0">
-                ({periodLabel})
-              </span>
+                <span className="hidden xl:inline text-xs font-semibold text-slate-500 ml-1">
+                  ({periodLabel})
+                </span>
+              </div>
             </div>
 
             {/* FILTRI DI VISUALIZZAZIONE */}
@@ -1173,13 +1255,7 @@ export default function App() {
         onTriggerPrint={handleExecutePrint}
       />
 
-      <PrintModal
-        isOpen={isPrintModalOpen}
-        onClose={() => setIsPrintModalOpen(false)}
-        currentStartDate={startDateStr}
-        onApplyAndPrint={handleApplyAndPrint}
-      />
-
+      
       <GatehouseModal
         isOpen={isGatehouseModalOpen}
         onClose={() => setIsGatehouseModalOpen(false)}

@@ -68,3 +68,25 @@ export function getDaysRange(startDateIso: string, count: number): string[] {
 
   return result;
 }
+
+export function getDaysBetween(startDateIso: string, endDateIso: string): string[] {
+  const start = parseISODate(startDateIso);
+  const end = parseISODate(endDateIso);
+  const result: string[] = [];
+
+  if (start > end) {
+    result.push(startDateIso);
+    return result;
+  }
+
+  const current = new Date(start);
+  // Limite di sicurezza: massimo 730 giorni (2 anni)
+  let count = 0;
+  while (current <= end && count < 730) {
+    result.push(toISODate(current));
+    current.setDate(current.getDate() + 1);
+    count++;
+  }
+
+  return result;
+}

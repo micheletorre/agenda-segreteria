@@ -125,8 +125,31 @@ export const AppointmentModal: React.FC<Props> = ({
   };
 
   const QUICK_TIMES = ['h 09.00', 'h 10.00', 'h 11.45', 'h 15.00', 'in mattinata', 'a seguire', 'pomeriggio'];
-  const QUICK_REFERENTS = ['MC', 'Giulia', 'Risorg', ''];
-  const QUICK_LOCATIONS = ['DEAS', 'Boehringer Ing.', 'Intesa Sanpaolo', 'Nexi', '1° piano'];
+  const QUICK_REFERENTS = ['Monte Citorio', 'Via Giulia', 'Risorgimento', ''];
+  const QUICK_LOCATIONS = [
+    'Banca Passadore',
+    'BPM',
+    'Duferco',
+    'Clifford Chance',
+    'Studio Laghi',
+    'Fondazione Terzo Pilastro',
+    'Fondazione Cultura e Arte',
+    'Nexi',
+    'Lottomatica',
+    'Deas',
+    'Sky',
+    'GFA',
+    'Boehringer Ing.',
+    'Banca Intesa'
+  ];
+  const QUICK_SIDE_NOTES = [
+    'Milano V.',
+    'Torre M.',
+    'Ferrante R.',
+    'Ricci A.',
+    'Geom. Paolini D.',
+    'Avv. Bonazzi'
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs no-print animate-in fade-in duration-150">
@@ -383,6 +406,32 @@ export const AppointmentModal: React.FC<Props> = ({
               placeholder="es. Paolini, Ricci F. (le parentesi vengono aggiunte in automatico)"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-base"
             />
+            {/* Scorciatoie Riferimento */}
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {QUICK_SIDE_NOTES.map((sn) => (
+                <button
+                  key={sn}
+                  type="button"
+                  onClick={() => setSideNote(sn)}
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                    sideNote.includes(sn)
+                      ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {sn}
+                </button>
+              ))}
+              {sideNote && (
+                <button
+                  type="button"
+                  onClick={() => setSideNote('')}
+                  className="text-xs px-2 py-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  Azzera
+                </button>
+              )}
+            </div>
           </div>
 
           {/* TOGGLE PER FOGLIO PORTINERIA */}
