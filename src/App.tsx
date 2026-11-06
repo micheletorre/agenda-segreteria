@@ -26,7 +26,9 @@ import {
   Archive,
   ArchiveRestore,
   Filter,
-  Check
+  Check,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import type { Appointment, DailyNote, Contact } from './types';
 import { INITIAL_APPOINTMENTS, INITIAL_DAILY_NOTES, INITIAL_CONTACTS } from './initialData';
@@ -45,22 +47,32 @@ import { DailyNoteModal } from './components/DailyNoteModal';
 import { ContactsModal } from './components/ContactsModal';
 import { ShareModal } from './components/ShareModal';
 import { GatehouseModal } from './components/GatehouseModal';
+import { PinModal } from './components/PinModal';
 
 // Nome applicazione configurabile (pronto per essere personalizzato su indicazione della segreteria)
 export const APP_NAME = 'AGENDA SEGRETERIA';
 export const APP_SUBTITLE = 'Direzione';
 export const CREDIT_LABEL = 'Sviluppo e supporto: Michele Torre';
 
-function isMobileRouteRequested(): boolean {
+export const SECRET_PIN = '1967';
+
+function isMobileInitial(): boolean {
   if (typeof window === 'undefined') return false;
+  // Se già sbloccato con PIN in questa sessione browser
+  if (sessionStorage.getItem('agenda_admin_unlocked') === 'true') {
+    return false;
+  }
   const search = window.location.search || '';
   const hash = window.location.hash || '';
-  return (
+  const hasMobileParam = (
     search.includes('vista=mobile') ||
     search.includes('sola_lettura=true') ||
     hash.includes('vista=mobile') ||
     hash.includes('mobile')
   );
+  // Qualsiasi smartphone/tablet (larghezza schermo < 768px) entra SEMPRE in sola lettura
+  const isMobileScreen = window.innerWidth < 768;
+  return hasMobileParam || isMobileScreen;
 }
 
 // Normalizzazione automatica delle sigle storiche
@@ -83,7 +95,12 @@ function normalizeReferents(list: Appointment[]): { changed: boolean; updated: A
 
 export default function App() {
   // Modalità di visualizzazione: Gestione (desktop) vs Consultazione (mobile / sola lettura)
-  const [isMobileMode, setIsMobileMode] = useState<boolean>(() => isMobileRouteRequested());
+  const [isMobileMode, setIsMobileMode] = useState<boolean>(() => isMobileInitial());
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return sessionStorage.getItem('agenda_admin_unlocked') === 'true';
+  });
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
 
   // Data e Appuntamenti (con fallback localStorage)
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
@@ -262,7 +279,19 @@ export default function App() {
     return appointments.filter((a) => a.is_concluded).length;
   }, [appointments]);
 
-    // Handlers Navigazione Temporale a blocchi
+      const handlePinSuccess = () => {
+    sessionStorage.setItem('agenda_admin_unlocked', 'true');
+    setIsAdminUnlocked(true);
+    setIsMobileMode(false);
+  };
+
+  const handleLockAdmin = () => {
+    sessionStorage.removeItem('agenda_admin_unlocked');
+    setIsAdminUnlocked(false);
+    setIsMobileMode(true);
+  };
+
+  // Handlers Navigazione Temporale a blocchi
   const handlePrevRange = () => {
     const diff = Math.max(1, daysCount);
     const s = parseISODate(startDateStr);
@@ -508,28 +537,43 @@ export default function App() {
             </div>
           </div>
 
-          {/* Pill Selector: Modalità Gestione vs Consultazione Mobile */}
+          {/* Controllo Accesso Segreteria (PIN) / Selettore Vista */}
           <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setIsMobileMode(false)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                !isMobileMode
-                  ? 'bg-slate-800 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <LayoutDashboard size={14} /> Modalità Segreteria
-            </button>
-            <button
-              onClick={() => setIsMobileMode(true)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                isMobileMode
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-xs'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Smartphone size={14} /> Anteprima Mobile
-            </button>
+            {isMobileMode ? (
+              isAdminUnlocked ? (
+                <button
+                  onClick={handleLockAdmin}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs cursor-pointer"
+                  title="Blocca modifiche e torna alla vista Sola Lettura"
+                >
+                  <Unlock size={14} /> Blocca / Sola Lettura
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsPinModalOpen(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                  title="Sblocca modalità gestione tramite PIN"
+                >
+                  <Lock size={14} className="text-amber-400" /> Area Segreteria
+                </button>
+              )
+            ) : (
+              <>
+                <button
+                  onClick={() => setIsMobileMode(false)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-slate-800 text-white shadow-xs cursor-pointer"
+                >
+                  <LayoutDashboard size={14} /> Gestione
+                </button>
+                <button
+                  onClick={handleLockAdmin}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition cursor-pointer"
+                  title="Torna in modalità sola lettura"
+                >
+                  <Smartphone size={14} /> Vista Lettore
+                </button>
+              </>
+            )}
           </div>
 
           {/* Azioni Rapide Barra Superiore */}
@@ -1206,9 +1250,32 @@ export default function App() {
             })}
           </div>
 
-          {/* PIÈ DI PAGINA (FIRMA SVILUPPO E SUPPORTO) */}
+          {/* PIÈ DI PAGINA */}
           <div className="mt-8 pt-4 border-t border-slate-200 text-center text-xs text-slate-500 font-medium">
-            {CREDIT_LABEL}
+            <div>{CREDIT_LABEL}</div>
+            
+            {/* Tasto discreto sblocco segreteria su mobile */}
+            {isMobileMode && (
+              <div className="no-print mt-3">
+                {!isAdminUnlocked ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsPinModalOpen(true)}
+                    className="text-[11px] text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 transition cursor-pointer"
+                  >
+                    <Lock size={11} className="text-amber-500" /> Accesso Segreteria
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleLockAdmin}
+                    className="text-[11px] text-amber-700 hover:text-amber-800 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 transition cursor-pointer font-bold"
+                  >
+                    <Unlock size={11} /> Esci da Gestione
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
         </div>
@@ -1265,6 +1332,12 @@ export default function App() {
         onDeleteAppointment={handleDeleteAppointment}
       />
 
+          <PinModal
+        isOpen={isPinModalOpen}
+        onClose={() => setIsPinModalOpen(false)}
+        onSuccess={handlePinSuccess}
+        correctPin={SECRET_PIN}
+      />
     </div>
   );
 }
