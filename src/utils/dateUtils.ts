@@ -1,4 +1,5 @@
 const ITALIAN_DAYS = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+const ITALIAN_DAYS_LOWER = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 const ITALIAN_MONTHS = [
   'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
   'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'
@@ -30,6 +31,15 @@ export function formatDayTitle(isoStr: string): { dayName: string; dateStr: stri
   };
 }
 
+export function formatGatehouseDate(isoStr: string): string {
+  const d = parseISODate(isoStr);
+  const dayName = ITALIAN_DAYS_LOWER[d.getDay()];
+  const dayNum = d.getDate();
+  const monthName = ITALIAN_MONTHS[d.getMonth()];
+  const year = d.getFullYear();
+  return `${dayName} ${dayNum} ${monthName} ${year}`;
+}
+
 export function formatHeaderDate(d: Date): string {
   const dayName = ITALIAN_DAYS[d.getDay()];
   const dayNum = String(d.getDate()).padStart(2, '0');
@@ -48,12 +58,13 @@ export function formatTimestamp(d: Date): string {
 }
 
 export function getDaysRange(startDateIso: string, count: number): string[] {
-  const start = parseISODate(startDateIso);
-  const days: string[] = [];
+  const result: string[] = [];
+  const current = parseISODate(startDateIso);
+
   for (let i = 0; i < count; i++) {
-    const nextDate = new Date(start);
-    nextDate.setDate(start.getDate() + i);
-    days.push(toISODate(nextDate));
+    result.push(toISODate(current));
+    current.setDate(current.getDate() + 1);
   }
-  return days;
+
+  return result;
 }

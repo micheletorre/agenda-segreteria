@@ -1,4 +1,5 @@
 import type { Appointment, DailyNote, Contact } from './types';
+import { HISTORICAL_EXCEL_DATA } from './data/historicalData';
 
 export const INITIAL_CONTACTS: Contact[] = [
   {
@@ -51,7 +52,8 @@ export const INITIAL_CONTACTS: Contact[] = [
   }
 ];
 
-export const INITIAL_APPOINTMENTS: Appointment[] = [
+// Appuntamenti base con flag per_portineria
+const BASE_APPOINTMENTS: Appointment[] = [
   // Mercoledì 04 novembre
   {
     id: 'app-1',
@@ -61,6 +63,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     title: 'DLG impianti per inversione stagionale CDZ',
     side_note: '(Paolini)',
     category: 'standard',
+    for_gatehouse: true,
   },
   {
     id: 'app-2',
@@ -69,6 +72,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     referent: 'MC',
     title: 'AU riceve D.ssa Canestrari',
     category: 'internal_red',
+    for_gatehouse: true,
   },
   {
     id: 'app-3',
@@ -78,6 +82,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     title: 'sopralluogo bagni e pittura',
     side_note: '(Ricci F.)',
     category: 'standard',
+    for_gatehouse: false,
   },
   {
     id: 'app-4',
@@ -87,6 +92,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     title: 'sopralluogo bagni e pittura',
     side_note: '(Ricci F.)',
     category: 'standard',
+    for_gatehouse: false,
   },
 
   // Giovedì 05 novembre
@@ -97,6 +103,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     referent: 'MC',
     title: 'AU riceve Dott. Nitoglia',
     category: 'internal_red',
+    for_gatehouse: true,
   },
 
   // Venerdì 06 novembre
@@ -107,6 +114,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     referent: 'MC',
     title: 'AU riceve D.ssa Canestrari',
     category: 'internal_red',
+    for_gatehouse: true,
   },
 
   // Lunedì 09 novembre
@@ -117,6 +125,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     referent: '',
     title: 'AU c/o Dott.ssa Galli',
     category: 'external_yellow',
+    for_gatehouse: false,
   },
 
   // Martedì 10 novembre
@@ -127,6 +136,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     referent: 'MC',
     title: 'AU riceve Dott. Nitoglia',
     category: 'internal_red',
+    for_gatehouse: true,
   },
 
   // Mercoledì 11 novembre
@@ -137,6 +147,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     referent: '',
     title: 'AU c/o Ars Biomedica',
     category: 'external_yellow',
+    for_gatehouse: false,
   },
 
   // Giovedì 12 novembre
@@ -147,6 +158,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     referent: 'MC',
     title: 'AU riceve Dott. Nitoglia',
     category: 'internal_red',
+    for_gatehouse: true,
   },
 
   // Venerdì 13 novembre
@@ -157,6 +169,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     referent: 'MC',
     title: 'AU riceve D.ssa Canestrari',
     category: 'internal_red',
+    for_gatehouse: true,
   },
 
   // Lunedì 16 novembre
@@ -167,6 +180,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     referent: '',
     title: 'AU c/o Dott.ssa Spagnolo',
     category: 'external_yellow',
+    for_gatehouse: false,
   },
 
   // Martedì 17 novembre
@@ -177,7 +191,29 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     referent: '',
     title: 'AU c/o Bios Euclide (andare 15 minuti prima)',
     category: 'external_yellow',
+    for_gatehouse: false,
   },
+];
+
+// Generazione id univoci per i dati storici Excel (evitando duplicati su date già coperte da app-1...app-6)
+const historicalMapped: Appointment[] = HISTORICAL_EXCEL_DATA
+  .filter((h) => h.date < '2026-11-04')
+  .map((h, i) => ({
+    id: `app-hist-${i + 1}`,
+    date: h.date,
+    time_label: h.time_label,
+    order_index: i,
+    referent: h.referent || '',
+    title: h.title,
+    category: h.category,
+    side_note: h.side_note || '',
+    location: h.location || '',
+    for_gatehouse: true,
+  }));
+
+export const INITIAL_APPOINTMENTS: Appointment[] = [
+  ...historicalMapped,
+  ...BASE_APPOINTMENTS,
 ];
 
 export const INITIAL_DAILY_NOTES: DailyNote[] = [

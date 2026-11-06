@@ -8,7 +8,9 @@ import {
   AlignLeft, 
   BookUser, 
   Check, 
-  UserPlus 
+  UserPlus,
+  ShieldCheck,
+  MapPin
 } from 'lucide-react';
 import type { Appointment, AppointmentCategory, Contact } from '../types';
 
@@ -39,6 +41,8 @@ export const AppointmentModal: React.FC<Props> = ({
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<AppointmentCategory>('standard');
   const [sideNote, setSideNote] = useState('');
+  const [location, setLocation] = useState('');
+  const [forGatehouse, setForGatehouse] = useState(false);
   const [contactId, setContactId] = useState<string | undefined>(undefined);
 
   // Autocomplete contatti
@@ -66,6 +70,8 @@ export const AppointmentModal: React.FC<Props> = ({
       setTitle(initialData.title || '');
       setCategory(initialData.category || 'standard');
       setSideNote(initialData.side_note || '');
+      setLocation(initialData.location || '');
+      setForGatehouse(Boolean(initialData.for_gatehouse));
       setContactId(initialData.contact_id);
     } else {
       setDate(defaultDate || new Date().toISOString().split('T')[0]);
@@ -74,6 +80,8 @@ export const AppointmentModal: React.FC<Props> = ({
       setTitle('');
       setCategory('standard');
       setSideNote('');
+      setLocation('');
+      setForGatehouse(false); // Default spento come richiesto
       setContactId(undefined);
     }
     setShowContactPicker(false);
@@ -100,13 +108,14 @@ export const AppointmentModal: React.FC<Props> = ({
       category,
       side_note: formattedSideNote,
       contact_id: contactId,
+      for_gatehouse: forGatehouse,
+      location: location.trim(),
     });
     onClose();
   };
 
   const handlePickContact = (c: Contact) => {
     const formattedTitle = c.title ? `${c.title} ${c.name}` : c.name;
-    // Se il titolo è ancora vuoto, proponiamo 'AU riceve [Titolo] [Nome]'
     if (!title.trim() || title === 'AU riceve ' || title.startsWith('AU riceve')) {
       setTitle(`AU riceve ${formattedTitle}`);
       setCategory('internal_red');
@@ -117,6 +126,7 @@ export const AppointmentModal: React.FC<Props> = ({
 
   const QUICK_TIMES = ['h 09.00', 'h 10.00', 'h 11.45', 'h 15.00', 'in mattinata', 'a seguire', 'pomeriggio'];
   const QUICK_REFERENTS = ['MC', 'Giulia', 'Risorg', ''];
+  const QUICK_LOCATIONS = ['DEAS', 'Boehringer Ing.', 'Intesa Sanpaolo', 'Nexi', '1° piano'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs no-print animate-in fade-in duration-150">
@@ -171,7 +181,7 @@ export const AppointmentModal: React.FC<Props> = ({
                   key={qt}
                   type="button"
                   onClick={() => setTimeLabel(qt)}
-                  className={`text-xs px-2.5 py-1 rounded-lg border transition ${
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition cursor-pointer ${
                     timeLabel === qt
                       ? 'bg-blue-600 text-white border-blue-600 font-semibold'
                       : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -180,6 +190,46 @@ export const AppointmentModal: React.FC<Props> = ({
                   {qt}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Luogo / Sede */}
+          <div>
+            <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-1">
+              <MapPin size={16} className="text-slate-400" /> Luogo / Sede (per foglio portineria)
+            </label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="es. DEAS, Boehringer Ing., Intesa Sanpaolo, Nexi (o lascia vuoto)"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-base"
+            />
+            {/* Scorciatoie Luogo */}
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {QUICK_LOCATIONS.map((loc) => (
+                <button
+                  key={loc}
+                  type="button"
+                  onClick={() => setLocation(loc)}
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                    location === loc
+                      ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {loc}
+                </button>
+              ))}
+              {location && (
+                <button
+                  type="button"
+                  onClick={() => setLocation('')}
+                  className="text-xs px-2 py-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  Azzera
+                </button>
+              )}
             </div>
           </div>
 
@@ -202,7 +252,7 @@ export const AppointmentModal: React.FC<Props> = ({
                   key={qr || 'nessuno'}
                   type="button"
                   onClick={() => setReferent(qr)}
-                  className={`text-xs px-2.5 py-1 rounded-lg border transition ${
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition cursor-pointer ${
                     referent === qr
                       ? 'bg-blue-600 text-white border-blue-600 font-semibold'
                       : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -253,7 +303,7 @@ export const AppointmentModal: React.FC<Props> = ({
                     key={c.id}
                     type="button"
                     onClick={() => handlePickContact(c)}
-                    className="w-full text-left px-2 py-1 rounded-lg hover:bg-white hover:shadow-2xs text-xs flex items-center justify-between transition"
+                    className="w-full text-left px-2 py-1 rounded-lg hover:bg-white hover:shadow-2xs text-xs flex items-center justify-between transition cursor-pointer"
                   >
                     <span className="font-semibold text-slate-800">
                       {c.title ? `${c.title} ` : ''}{c.name}
@@ -268,7 +318,7 @@ export const AppointmentModal: React.FC<Props> = ({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="es. AU riceve D.ssa Canestrari, AU c/o Ars Biomedica..."
+              placeholder="es. AU riceve D.ssa Canestrari, AU c/o Ars Biomedica, ditta con targa mezzo..."
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-base"
               required
             />
@@ -333,6 +383,42 @@ export const AppointmentModal: React.FC<Props> = ({
               placeholder="es. Paolini, Ricci F. (le parentesi vengono aggiunte in automatico)"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-base"
             />
+          </div>
+
+          {/* TOGGLE PER FOGLIO PORTINERIA */}
+          <div className="pt-1">
+            <label className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition ${
+              forGatehouse
+                ? 'bg-emerald-50/90 border-emerald-300 ring-1 ring-emerald-400'
+                : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg transition ${
+                  forGatehouse ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
+                }`}>
+                  <ShieldCheck size={18} />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    Includi nel foglio Portineria
+                    {forGatehouse && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-600 text-white px-1.5 py-0.5 rounded-md">
+                        Attivo
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Stampa nel foglio autorizzazioni e accessi giornalieri per i portieri
+                  </div>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={forGatehouse}
+                onChange={(e) => setForGatehouse(e.target.checked)}
+                className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+              />
+            </label>
           </div>
 
           {/* Bottoni footer */}

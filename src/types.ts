@@ -21,6 +21,8 @@ export interface Appointment {
   category: AppointmentCategory;
   side_note?: string; // e.g. '(Paolini)', '(Ricci F.)'
   contact_id?: string;
+  for_gatehouse?: boolean; // Flag per includere nel foglio portineria
+  location?: string; // Sede / Luogo specifico (es. DEAS, Boehringer, Intesa Sanpaolo, ecc.)
 }
 
 export interface DailyNote {

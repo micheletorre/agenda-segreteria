@@ -19,7 +19,9 @@ import {
   CalendarPlus,
   Building2,
   CheckCircle2,
-  FileText
+  FileText,
+  ShieldCheck,
+  MapPin
 } from 'lucide-react';
 import type { Appointment, DailyNote, Contact } from './types';
 import { INITIAL_APPOINTMENTS, INITIAL_DAILY_NOTES, INITIAL_CONTACTS } from './initialData';
@@ -38,6 +40,7 @@ import { DailyNoteModal } from './components/DailyNoteModal';
 import { ContactsModal } from './components/ContactsModal';
 import { ShareModal } from './components/ShareModal';
 import { PrintModal } from './components/PrintModal';
+import { GatehouseModal } from './components/GatehouseModal';
 
 // Nome applicazione configurabile (pronto per essere personalizzato su indicazione della segreteria)
 export const APP_NAME = 'AGENDA SEGRETERIA';
@@ -104,6 +107,7 @@ export default function App() {
   const [isContactsModalOpen, setIsContactsModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isGatehouseModalOpen, setIsGatehouseModalOpen] = useState(false);
 
   // Caricamento e Realtime con Supabase
   useEffect(() => {
@@ -199,7 +203,7 @@ export default function App() {
   };
 
   // CRUD Appuntamenti
-  const handleSaveAppointment = async (app: Appointment) => {
+    const handleSaveAppointment = async (app: Appointment) => {
     setAppointments((prev) => {
       const exists = prev.some((a) => a.id === app.id);
       if (exists) {
@@ -210,8 +214,38 @@ export default function App() {
     setLastUpdateDate(new Date());
 
     if (isSupabaseConfigured && supabase) {
-      await supabase.from('appointments').upsert(app);
+      try {
+        const { error } = await supabase.from('appointments').upsert(app);
+        if (error && (error.code === '42703' || error.message?.includes('column'))) {
+          // Fallback se le colonne non sono ancora state aggiunte a Supabase
+          const { for_gatehouse, location, ...rest } = app;
+          await supabase.from('appointments').upsert(rest);
+        }
+      } catch (err) {
+        console.warn('Errore sincronizzazione Supabase:', err);
+      }
     }
+  };
+
+  const handleToggleGatehouse = async (id: string, newState: boolean) => {
+    const target = appointments.find((a) => a.id === id);
+    if (!target) return;
+    const updated = { ...target, for_gatehouse: newState };
+    await handleSaveAppointment(updated);
+  };
+
+  const handleQuickAddGatehouse = (partial: Partial<Appointment>) => {
+    const newApp: Appointment = {
+      id: partial.id || `app-${Date.now()}`,
+      date: partial.date || startDateStr,
+      time_label: partial.time_label || 'in giornata',
+      location: partial.location || '',
+      title: partial.title || '',
+      side_note: partial.side_note || '',
+      category: partial.category || 'standard',
+      for_gatehouse: true,
+    };
+    handleSaveAppointment(newApp);
   };
 
   const handleDeleteAppointment = async (id: string) => {
@@ -368,6 +402,14 @@ export default function App() {
               title="Apri Rubrica Anagrafica"
             >
               <BookUser size={14} className="text-blue-400" /> Anagrafica ({contacts.length})
+            </button>
+
+            <button
+              onClick={() => setIsGatehouseModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+              title="Apri e stampa Foglio Portineria A4 per gli accessi del giorno"
+            >
+              <ShieldCheck size={14} /> Foglio Portineria
             </button>
 
             <button
@@ -684,7 +726,37 @@ export default function App() {
                           </div>
 
                           {/* Riferimento / Contatto a destra + Azioni rapide */}
-                          <div className="flex items-center gap-3 shrink-0 ml-auto">
+                          <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
+                            {/* Chip Luogo / Sede */}
+                            {app.location && (
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-200 text-slate-800 border border-slate-300 inline-flex items-center gap-1 shrink-0 print:border-black">
+                                <MapPin size={11} className="print:hidden text-slate-500" />
+                                {app.location}
+                              </span>
+                            )}
+
+                            {/* Badge / Tasto Rapido Portineria */}
+                            {!isMobileMode && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleGatehouse(app.id, !app.for_gatehouse);
+                                }}
+                                className={`no-print p-1 rounded-md transition cursor-pointer ${
+                                  app.for_gatehouse
+                                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 ring-1 ring-emerald-400'
+                                    : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100 opacity-60 group-hover/app:opacity-100'
+                                }`}
+                                title={
+                                  app.for_gatehouse
+                                    ? 'Incluso nel foglio Portineria (clicca per rimuovere)'
+                                    : 'Non incluso in Portineria (clicca per includere)'
+                                }
+                              >
+                                <ShieldCheck size={14} />
+                              </button>
+                            )}
                             {app.side_note && (
                               <span className="text-base sm:text-lg font-medium text-slate-700 print:text-black flex items-center gap-1">
                                 <FileText size={13} className="text-slate-400 shrink-0 print:hidden" />
@@ -806,7 +878,16 @@ export default function App() {
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
         currentStartDate={startDateStr}
-        onApplyAndPrint={handleApplyAndPrint}
+                onApplyAndPrint={handleApplyAndPrint}
+      />
+
+      <GatehouseModal
+        isOpen={isGatehouseModalOpen}
+        onClose={() => setIsGatehouseModalOpen(false)}
+        appointments={appointments}
+        onToggleGatehouse={handleToggleGatehouse}
+        onQuickAddAccess={handleQuickAddGatehouse}
+        onDeleteAppointment={handleDeleteAppointment}
       />
 
     </div>
