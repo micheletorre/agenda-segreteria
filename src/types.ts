@@ -23,6 +23,7 @@ export interface Appointment {
   contact_id?: string;
   for_gatehouse?: boolean; // Flag per includere nel foglio portineria
   location?: string; // Sede / Luogo specifico (es. DEAS, Boehringer, Intesa Sanpaolo, ecc.)
+  is_concluded?: boolean; // Depubblicato / concluso (nascosto dalla vista 2 settimane, ma conservato in storico)
 }
 
 export interface DailyNote {
@@ -30,5 +31,5 @@ export interface DailyNote {
   start_date: string; // 'YYYY-MM-DD'
   end_date: string; // 'YYYY-MM-DD'
   note_text: string; // e.g. 'Andrea Acciari in ferie dal 05.11 al 07.11'
-  note_type: 'ferie' | 'avviso' | 'chiusura';
+  note_type: 'ferie' | 'permesso' | 'assente' | 'avviso' | 'chiusura';
 }

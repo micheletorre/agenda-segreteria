@@ -102,11 +102,11 @@ export const GatehouseModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4 backdrop-blur-xs no-print animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[96vh] flex flex-col border border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4 backdrop-blur-xs animate-in fade-in duration-150 print:static print:inset-auto print:p-0 print:bg-transparent print:z-auto print:block">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[96vh] flex flex-col border border-slate-200 overflow-hidden print:border-none print:shadow-none print:rounded-none print:max-h-none print:overflow-visible print:w-full print:block">
         
-        {/* HEADER MODALE */}
-        <div className="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between shrink-0">
+        {/* HEADER MODALE (NASCOSTO IN STAMPA) */}
+        <div className="no-print px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
               <ShieldCheck size={20} />
@@ -131,8 +131,8 @@ export const GatehouseModal: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* BARRA CONTROLLI E SELEZIONE DATA */}
-        <div className="p-4 bg-slate-50 border-b border-slate-200 shrink-0 space-y-3">
+        {/* BARRA CONTROLLI E SELEZIONE DATA (NASCOSTA IN STAMPA) */}
+        <div className="no-print p-4 bg-slate-50 border-b border-slate-200 shrink-0 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             
             {/* Selettore rapido giorno */}
@@ -308,16 +308,16 @@ export const GatehouseModal: React.FC<Props> = ({
 
         </div>
 
-        {/* ANTEPRIMA DEL DOCUMENTO A4 PER LA PORTINERIA */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/70 flex justify-center">
+        {/* ANTEPRIMA DEL DOCUMENTO A4 PER LA PORTINERIA (STAMPABILE) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/70 flex justify-center print:p-0 print:m-0 print:bg-transparent print:overflow-visible print:block">
           <div 
             id="gatehouse-print-area" 
-            className="gatehouse-sheet bg-white text-black p-8 sm:p-10 shadow-lg border border-slate-300 w-full max-w-[210mm] min-h-[297mm] flex flex-col justify-between font-montserrat"
+            className="gatehouse-sheet bg-white text-black p-8 sm:p-10 shadow-lg border border-slate-300 w-full max-w-[210mm] min-h-[297mm] flex flex-col justify-between font-montserrat print:shadow-none print:border-none print:p-0 print:m-0 print:w-full print:min-h-0 print:block"
             style={{ fontFamily: 'Montserrat, sans-serif' }}
           >
             <div>
               {/* TITOLO SUPERIORE */}
-              <div className="border border-black py-2.5 px-4 text-center mb-5 bg-slate-50/50">
+              <div className="border border-black py-2.5 px-4 text-center mb-5 bg-slate-50/50 print:bg-transparent">
                 <h1 className="text-lg sm:text-xl font-bold tracking-wide uppercase text-black m-0">
                   AGENDA APPUNTAMENTI E ACCESSI
                 </h1>
@@ -332,7 +332,7 @@ export const GatehouseModal: React.FC<Props> = ({
               <div className="border-t border-l border-r border-black">
                 <table className="w-full border-collapse text-xs sm:text-sm">
                   <thead>
-                    <tr className="border-b border-black bg-slate-100/70 text-black font-bold uppercase text-[11px] sm:text-xs">
+                    <tr className="border-b border-black bg-slate-100/70 text-black font-bold uppercase text-[11px] sm:text-xs print:bg-slate-100">
                       <th className="border-r border-black py-2 px-3 text-left w-[18%]">ORA</th>
                       <th className="border-r border-black py-2 px-3 text-left w-[22%]">LUOGO</th>
                       <th className="py-2 px-3 text-left w-[60%]">DESCRIZIONE</th>
@@ -414,8 +414,8 @@ export const GatehouseModal: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* FOOTER AZIONI MODALE */}
-        <div className="px-5 py-3 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
+        {/* FOOTER AZIONI MODALE (NASCOSTO IN STAMPA) */}
+        <div className="no-print px-5 py-3 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
           <div className="text-xs text-slate-500 font-medium">
             Foglio impaginato a <strong className="text-slate-800">scala 100%</strong> pronto per stampa diretta su A4 o salvataggio PDF.
           </div>
