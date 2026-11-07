@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import type { Appointment } from '../types';
 import { toISODate, formatGatehouseDate } from '../utils/dateUtils';
-import { getPortineriaShiftsForDate, getPortineriaUrlForDate } from '../utils/portineriaShifts';
+import { usePortineriaShifts, getPortineriaUrlForDate } from '../utils/portineriaShifts';
 
 interface Props {
   isOpen: boolean;
@@ -59,10 +59,8 @@ export const GatehouseModal: React.FC<Props> = ({
     return dayAppointments.filter((a) => a.for_gatehouse);
   }, [dayAppointments]);
 
-  // Turni e custodi in servizio nella data selezionata
-  const portineriaShifts = useMemo(() => {
-    return getPortineriaShiftsForDate(selectedDate);
-  }, [selectedDate]);
+  // Turni e custodi in servizio nella data selezionata (in tempo reale da Supabase Cloud)
+  const portineriaShifts = usePortineriaShifts(selectedDate);
 
   const activeCustodiansSummary = useMemo(() => {
     const list: string[] = [];
@@ -224,7 +222,16 @@ export const GatehouseModal: React.FC<Props> = ({
               </div>
               <div className="min-w-0">
                 <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                  <span>Custodi in servizio ({portineriaShifts.giornoNome}):</span>
+                  <span>Custodi in servizio ({portineriaShifts.giornoNome} {selectedDate.split('-').reverse().join('/')}):</span>
+                  {portineriaShifts.isReale ? (
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-bold normal-case">
+                      Cloud Portineria
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.2 rounded font-medium normal-case">
+                      Stima Teorica
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap mt-0.5 text-xs">
                   {portineriaShifts.mattina.length > 0 && (
@@ -248,6 +255,16 @@ export const GatehouseModal: React.FC<Props> = ({
                     </span>
                   )}
                 </div>
+                {portineriaShifts.assentiSpeciali.length > 0 && (
+                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-200/90 flex-wrap">
+                    <span className="font-semibold text-slate-400">Assenti:</span>
+                    {portineriaShifts.assentiSpeciali.map((a) => (
+                      <span key={a.nome} className="inline-flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 text-amber-300 px-1.5 py-0.5 rounded text-[11px] font-medium">
+                        {a.nome} <span className="opacity-80">({a.note || 'assente'})</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

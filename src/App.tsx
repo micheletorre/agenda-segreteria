@@ -47,7 +47,7 @@ import { ContactsModal } from './components/ContactsModal';
 import { ShareModal } from './components/ShareModal';
 import { GatehouseModal } from './components/GatehouseModal';
 import { PinModal } from './components/PinModal';
-import { getPortineriaShiftsForDate, getPortineriaUrlForDate } from './utils/portineriaShifts';
+import { usePortineriaShifts, getPortineriaUrlForDate } from './utils/portineriaShifts';
 
 // Nome applicazione configurabile (pronto per essere personalizzato su indicazione della segreteria)
 export const APP_NAME = 'AGENDA SEGRETERIA';
@@ -149,8 +149,8 @@ export default function App() {
   const [onlyDaysWithContent, setOnlyDaysWithContent] = useState<boolean>(true); // Nasconde giorni vuoti
   const [showConcluded, setShowConcluded] = useState<boolean>(false); // Mostra archivio conclusi
 
-  // Custodi in servizio oggi in portineria (calcolati matematicamente in tempo reale)
-  const todayGateShifts = useMemo(() => getPortineriaShiftsForDate(toISODate(new Date())), []);
+  // Custodi in servizio in portineria per la data consultata (sincronizzati in tempo reale dal database Cloud di Turni Portineria)
+  const activeGateShifts = usePortineriaShifts(startDateStr);
 
   // Drag & drop state
   const [draggedAppId, setDraggedAppId] = useState<string | null>(null);
@@ -575,18 +575,47 @@ export default function App() {
                   <Clock size={11} className="text-slate-500" /> {formatTimestamp(lastUpdateDate)}
                 </p>
                 {!isMobileMode && (
-                  <span className="hidden md:inline-flex items-center gap-1 text-[11px] text-slate-400 border-l border-slate-700 pl-2">
-                    <ShieldCheck size={12} className="text-emerald-400" />
-                    <span className="text-slate-400">In portineria oggi:</span>
-                    <span className="text-amber-300 font-semibold">
-                      ☀️ {todayGateShifts.mattina.map((p) => p.nome).join(', ')}
+                  <div
+                    className="hidden md:inline-flex items-center gap-1.5 text-[11px] text-slate-400 border-l border-slate-700 pl-2.5 cursor-default"
+                    title={`Turni Portineria per ${activeGateShifts.giornoNome} ${startDateStr.split('-').reverse().join('/')}:\n` +
+                      (activeGateShifts.mattina.length > 0 ? `☀️ Mattina: ${activeGateShifts.mattina.map(p => `${p.nome} (${p.orario})`).join(', ')}\n` : '') +
+                      (activeGateShifts.cavallo.length > 0 ? `🌿 Cavallo: ${activeGateShifts.cavallo.map(p => `${p.nome} (${p.orario})`).join(', ')}\n` : '') +
+                      (activeGateShifts.pomeriggio.length > 0 ? `🌇 Pomeriggio: ${activeGateShifts.pomeriggio.map(p => `${p.nome} (${p.orario})`).join(', ')}\n` : '') +
+                      (activeGateShifts.notte.length > 0 ? `🌙 Notte: ${activeGateShifts.notte.map(p => `${p.nome} (${p.orario})`).join(', ')}\n` : '') +
+                      (activeGateShifts.assentiSpeciali.length > 0 ? `🏖️ Assenti: ${activeGateShifts.assentiSpeciali.map(p => `${p.nome} (${p.note})`).join(', ')}\n` : '') +
+                      (activeGateShifts.isReale ? '✓ Sincronizzato da Cloud Portineria' : 'ℹ️ Stima da rotazione teorica')
+                    }
+                  >
+                    <ShieldCheck size={13} className="text-emerald-400 shrink-0" />
+                    <span className="text-slate-300 font-semibold">
+                      Portineria ({activeGateShifts.giornoNome.slice(0, 3)} {startDateStr.split('-').slice(1).reverse().join('/')}):
                     </span>
-                    {todayGateShifts.pomeriggio.length > 0 && (
-                      <span className="text-sky-300 font-semibold">
-                        · 🌇 {todayGateShifts.pomeriggio.map((p) => p.nome).join(', ')}
+                    {activeGateShifts.mattina.length > 0 && (
+                      <span className="text-amber-300 font-semibold">
+                        ☀️ {activeGateShifts.mattina.map((p) => p.nome).join(', ')}
                       </span>
                     )}
-                  </span>
+                    {activeGateShifts.cavallo.length > 0 && (
+                      <span className="text-emerald-300 font-semibold">
+                        · 🌿 {activeGateShifts.cavallo.map((p) => p.nome).join(', ')}
+                      </span>
+                    )}
+                    {activeGateShifts.pomeriggio.length > 0 && (
+                      <span className="text-sky-300 font-semibold">
+                        · 🌇 {activeGateShifts.pomeriggio.map((p) => p.nome).join(', ')}
+                      </span>
+                    )}
+                    {activeGateShifts.notte.length > 0 && (
+                      <span className="text-purple-300 font-semibold">
+                        · 🌙 {activeGateShifts.notte.map((p) => p.nome).join(', ')}
+                      </span>
+                    )}
+                    {activeGateShifts.isReale && (
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-bold">
+                        Cloud
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
