@@ -4,10 +4,12 @@ import {
   Printer, 
   ShieldCheck, 
   Plus, 
-  Trash2
+  Trash2,
+  ExternalLink
 } from 'lucide-react';
 import type { Appointment } from '../types';
 import { toISODate, formatGatehouseDate } from '../utils/dateUtils';
+import { getPortineriaShiftsForDate, getPortineriaUrlForDate } from '../utils/portineriaShifts';
 
 interface Props {
   isOpen: boolean;
@@ -56,6 +58,25 @@ export const GatehouseModal: React.FC<Props> = ({
   const gatehouseItems = useMemo(() => {
     return dayAppointments.filter((a) => a.for_gatehouse);
   }, [dayAppointments]);
+
+  // Turni e custodi in servizio nella data selezionata
+  const portineriaShifts = useMemo(() => {
+    return getPortineriaShiftsForDate(selectedDate);
+  }, [selectedDate]);
+
+  const activeCustodiansSummary = useMemo(() => {
+    const list: string[] = [];
+    if (portineriaShifts.mattina.length > 0) {
+      list.push(`Mattina: ${portineriaShifts.mattina.map((p) => p.nome).join(', ')}`);
+    }
+    if (portineriaShifts.cavallo.length > 0) {
+      list.push(`Cavallo: ${portineriaShifts.cavallo.map((p) => p.nome).join(', ')}`);
+    }
+    if (portineriaShifts.pomeriggio.length > 0) {
+      list.push(`Pomeriggio: ${portineriaShifts.pomeriggio.map((p) => p.nome).join(', ')}`);
+    }
+    return list.join(' · ');
+  }, [portineriaShifts]);
 
   // Numero di righe vuote per riempire il foglio A4 (almeno 24 righe totali per simulare il modulo originale)
   const TOTAL_GRID_ROWS = 24;
@@ -193,6 +214,53 @@ export const GatehouseModal: React.FC<Props> = ({
               </button>
             </div>
 
+          </div>
+
+          {/* SCHEDA PERSONALE PORTINERIA DI TURNO */}
+          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-3 rounded-xl border border-slate-700 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                <ShieldCheck size={16} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <span>Custodi in servizio ({portineriaShifts.giornoNome}):</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap mt-0.5 text-xs">
+                  {portineriaShifts.mattina.length > 0 && (
+                    <span className="inline-flex items-center gap-1 font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                      ☀️ Mattina: <strong className="text-white">{portineriaShifts.mattina.map((p) => p.nome).join(', ')}</strong> ({portineriaShifts.mattina[0]?.orario})
+                    </span>
+                  )}
+                  {portineriaShifts.cavallo.length > 0 && (
+                    <span className="inline-flex items-center gap-1 font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                      🌿 Cavallo: <strong className="text-white">{portineriaShifts.cavallo.map((p) => p.nome).join(', ')}</strong> ({portineriaShifts.cavallo[0]?.orario})
+                    </span>
+                  )}
+                  {portineriaShifts.pomeriggio.length > 0 && (
+                    <span className="inline-flex items-center gap-1 font-semibold text-sky-300 bg-sky-500/10 border border-sky-500/30 px-2 py-0.5 rounded-md">
+                      🌇 Pomeriggio: <strong className="text-white">{portineriaShifts.pomeriggio.map((p) => p.nome).join(', ')}</strong> ({portineriaShifts.pomeriggio[0]?.orario})
+                    </span>
+                  )}
+                  {portineriaShifts.notte.length > 0 && (
+                    <span className="inline-flex items-center gap-1 font-semibold text-purple-300 bg-purple-500/10 border border-purple-500/30 px-2 py-0.5 rounded-md">
+                      🌙 Notte: <strong className="text-white">{portineriaShifts.notte.map((p) => p.nome).join(', ')}</strong> ({portineriaShifts.notte[0]?.orario})
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <a
+              href={getPortineriaUrlForDate(selectedDate)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="self-start md:self-auto px-3 py-1.5 rounded-lg bg-slate-700/80 hover:bg-slate-700 text-amber-300 border border-slate-600 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0"
+              title="Apri l'app Turni Portineria centrata su questa data"
+            >
+              <span>Vedi Turni Portineria</span>
+              <ExternalLink size={13} className="text-amber-400" />
+            </a>
           </div>
 
           {/* Form Inserimento Rapido */}
@@ -397,6 +465,11 @@ export const GatehouseModal: React.FC<Props> = ({
                 <div className="space-y-2">
                   <div className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-black">
                     NOME E FIRMA PORTIERE PER VISIONE
+                    {activeCustodiansSummary && (
+                      <span className="block text-[10px] font-normal normal-case text-slate-700 mt-0.5">
+                        In servizio: {activeCustodiansSummary}
+                      </span>
+                    )}
                   </div>
                   <div className="border-b border-dotted border-black h-4 w-full"></div>
                   <div className="border-b border-dotted border-black h-4 w-full"></div>

@@ -26,7 +26,8 @@ import {
   Filter,
   Check,
   Lock,
-  Unlock
+  Unlock,
+  ExternalLink
 } from 'lucide-react';
 import type { Appointment, DailyNote, Contact } from './types';
 import { INITIAL_APPOINTMENTS, INITIAL_DAILY_NOTES, INITIAL_CONTACTS } from './initialData';
@@ -46,6 +47,7 @@ import { ContactsModal } from './components/ContactsModal';
 import { ShareModal } from './components/ShareModal';
 import { GatehouseModal } from './components/GatehouseModal';
 import { PinModal } from './components/PinModal';
+import { getPortineriaShiftsForDate, getPortineriaUrlForDate } from './utils/portineriaShifts';
 
 // Nome applicazione configurabile (pronto per essere personalizzato su indicazione della segreteria)
 export const APP_NAME = 'AGENDA SEGRETERIA';
@@ -127,6 +129,15 @@ export default function App() {
   });
 
   const [endDateStr, setEndDateStr] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlDate = urlParams.get('data');
+      if (urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate)) {
+        const d = parseISODate(urlDate);
+        d.setDate(d.getDate() + 13);
+        return toISODate(d);
+      }
+    }
     const d = new Date();
     d.setDate(d.getDate() + 13);
     return toISODate(d);
@@ -137,6 +148,9 @@ export default function App() {
   // Filtri vista
   const [onlyDaysWithContent, setOnlyDaysWithContent] = useState<boolean>(true); // Nasconde giorni vuoti
   const [showConcluded, setShowConcluded] = useState<boolean>(false); // Mostra archivio conclusi
+
+  // Custodi in servizio oggi in portineria (calcolati matematicamente in tempo reale)
+  const todayGateShifts = useMemo(() => getPortineriaShiftsForDate(toISODate(new Date())), []);
 
   // Drag & drop state
   const [draggedAppId, setDraggedAppId] = useState<string | null>(null);
@@ -556,9 +570,25 @@ export default function App() {
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                <Clock size={11} className="text-slate-500" /> {formatTimestamp(lastUpdateDate)}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                  <Clock size={11} className="text-slate-500" /> {formatTimestamp(lastUpdateDate)}
+                </p>
+                {!isMobileMode && (
+                  <span className="hidden md:inline-flex items-center gap-1 text-[11px] text-slate-400 border-l border-slate-700 pl-2">
+                    <ShieldCheck size={12} className="text-emerald-400" />
+                    <span className="text-slate-400">In portineria oggi:</span>
+                    <span className="text-amber-300 font-semibold">
+                      ☀️ {todayGateShifts.mattina.map((p) => p.nome).join(', ')}
+                    </span>
+                    {todayGateShifts.pomeriggio.length > 0 && (
+                      <span className="text-sky-300 font-semibold">
+                        · 🌇 {todayGateShifts.pomeriggio.map((p) => p.nome).join(', ')}
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -595,6 +625,16 @@ export default function App() {
                   >
                     <UserPlus size={14} /> Ferie
                   </button>
+                  <a
+                    href={getPortineriaUrlForDate(toISODate(new Date()))}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-semibold text-xs transition cursor-pointer"
+                    title="Apri app Turni Portineria"
+                  >
+                    <ShieldCheck size={13} className="text-emerald-400" /> Turni
+                    <ExternalLink size={11} className="text-slate-400" />
+                  </a>
                   <button
                     onClick={handleLockAdmin}
                     className="px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 bg-amber-500 text-slate-950 hover:bg-amber-400 font-black shadow-md transition cursor-pointer"
@@ -625,6 +665,18 @@ export default function App() {
               >
                 <ShieldCheck size={14} /> Foglio Portineria
               </button>
+
+              <a
+                href={getPortineriaUrlForDate(startDateStr)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                title={`Apri l'app Turni Portineria sincronizzata sulla data ${startDateStr}`}
+              >
+                <ShieldCheck size={14} className="text-emerald-400" />
+                <span>Turni Portineria</span>
+                <ExternalLink size={12} className="text-slate-400" />
+              </a>
 
               <button
                 onClick={() => setIsShareModalOpen(true)}
