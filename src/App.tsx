@@ -524,6 +524,49 @@ export default function App() {
     window.print();
   };
 
+  // Evidenziazione temporanea del giorno selezionato
+  const [highlightedDay, setHighlightedDay] = useState<string | null>(null);
+
+  // Scorrimento fluido al giorno con compensazione dinamica dell'altezza dell'header
+  const scrollToDay = (isoDay: string) => {
+    const targetEl = document.getElementById(`day-${isoDay}`);
+
+    // Se il giorno è nascosto perché vuoto con il filtro attivo, disattiviamo temporaneamente il filtro
+    if (!targetEl && onlyDaysWithContent) {
+      setOnlyDaysWithContent(false);
+      setTimeout(() => {
+        const delayedEl = document.getElementById(`day-${isoDay}`);
+        if (delayedEl) {
+          executeScrollToElement(delayedEl, isoDay);
+        }
+      }, 60);
+      return;
+    }
+
+    if (targetEl) {
+      executeScrollToElement(targetEl, isoDay);
+    }
+  };
+
+  const executeScrollToElement = (element: HTMLElement, isoDay: string) => {
+    const header = document.querySelector('header');
+    const headerHeight = header ? header.getBoundingClientRect().height : 220;
+    const elementPosition = element.getBoundingClientRect().top;
+    // Margine di respiro di 16px per staccare la card dall'header in modo arioso
+    const offsetPosition = elementPosition + window.pageYOffset - headerHeight - 16;
+
+    window.scrollTo({
+      top: Math.max(0, offsetPosition),
+      behavior: 'smooth'
+    });
+
+    // Attiva evidenziazione visiva temporanea per 2.5 secondi
+    setHighlightedDay(isoDay);
+    setTimeout(() => {
+      setHighlightedDay((curr) => (curr === isoDay ? null : curr));
+    }, 2500);
+  };
+
   
   // Calcolo etichetta periodo corrente per l'header
   const periodLabel = useMemo(() => {
@@ -924,15 +967,12 @@ export default function App() {
                   <button
                     key={isoDay}
                     type="button"
-                    onClick={() => {
-                      const el = document.getElementById(`day-${isoDay}`);
-                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }}
+                    onClick={() => scrollToDay(isoDay)}
                     className={`px-2 py-1 rounded-lg border text-center shrink-0 transition cursor-pointer flex items-center gap-1 ${
                       count > 0 || hasNotes
                         ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 font-bold'
                         : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
-                    } ${isSelected ? 'ring-2 ring-amber-400' : ''}`}
+                    } ${isSelected || highlightedDay === isoDay ? 'ring-2 ring-amber-400 bg-amber-500/25' : ''}`}
                     title={`${dayName} ${dateStr}: ${count} appuntamenti`}
                   >
                     <span>{dayAbbr} {dayNum}</span>
@@ -1029,7 +1069,9 @@ export default function App() {
                     handleDropOnDay(isoDay);
                     setDragOverDay(null);
                   }}
-                  className={`day-block group rounded-xl p-3 sm:p-4 border transition ${zebraClass} ${
+                  className={`day-block group rounded-xl p-3 sm:p-4 border transition-all duration-300 scroll-mt-60 sm:scroll-mt-64 ${zebraClass} ${
+                    highlightedDay === isoDay ? 'ring-3 ring-amber-400 bg-amber-50/80 shadow-lg' : ''
+                  } ${
                     dragOverDay === isoDay ? 'ring-3 ring-blue-500 bg-blue-50/70 shadow-md' : ''
                   }`}
                 >
