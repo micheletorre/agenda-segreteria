@@ -1078,9 +1078,9 @@ export default function App() {
           {/* INTESTAZIONE IDENTICA AL DOCUMENTO CARTACEO */}
           <div className="border-b-2 border-slate-900 pb-3 mb-5">
             <div className="flex justify-between items-start text-sm sm:text-base font-semibold">
-              {/* Sinistra: Data emissione corretta e dinamica in rosso */}
+              {/* Sinistra: Data odierna fissa in rosso */}
               <div className="text-red-700 font-bold tracking-tight text-base sm:text-lg">
-                {formatHeaderDate(parseISODate(displayDays[0] || startDateStr))}
+                {formatHeaderDate(new Date())}
               </div>
               {/* Destra: Aggiornamento con timestamp in font Montserrat */}
               <div className="text-slate-600 font-medium text-xs sm:text-sm tracking-tight">
