@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Printer, 
   Plus, 
@@ -206,8 +206,14 @@ export default function App() {
 
         const { data: contactsData } = await client.from('contacts').select('*').order('name', { ascending: true });
         if (contactsData && contactsData.length > 0) {
-          setContacts(contactsData);
-          localStorage.setItem('agenda_contacts', JSON.stringify(contactsData));
+          const localSaved: Contact[] = JSON.parse(localStorage.getItem('agenda_contacts') || '[]');
+          const localMap = new Map(localSaved.map((c) => [c.id, c]));
+          const mergedContacts = contactsData.map((c: Contact) => ({
+            ...c,
+            address: c.address || localMap.get(c.id)?.address || '',
+          }));
+          setContacts(mergedContacts);
+          localStorage.setItem('agenda_contacts', JSON.stringify(mergedContacts));
         }
 
         setLastUpdateDate(new Date());
@@ -507,7 +513,15 @@ export default function App() {
     });
 
     if (isSupabaseConfigured && supabase) {
-      await supabase.from('contacts').upsert(contact);
+      try {
+        const { error } = await supabase.from('contacts').upsert(contact);
+        if (error && (error.code === '42703' || error.message?.includes('column') || error.message?.includes('address'))) {
+          const { address, ...rest } = contact;
+          await supabase.from('contacts').upsert(rest);
+        }
+      } catch (err) {
+        console.warn('Errore sincronizzazione contatto Supabase:', err);
+      }
     }
   };
 
@@ -524,22 +538,52 @@ export default function App() {
     window.print();
   };
 
-  // Evidenziazione temporanea del giorno selezionato
+  // Riferimento all'header fisso e monitoraggio millimetrico della sua altezza reale
+  const headerRef = useRef<HTMLElement | null>(null);
+  const scrollAnimRef = useRef<number | null>(null);
+  const [headerHeight, setHeaderHeight] = useState<number>(210);
   const [highlightedDay, setHighlightedDay] = useState<string | null>(null);
 
-  // Scorrimento fluido al giorno con compensazione dinamica dell'altezza dell'header
+  useEffect(() => {
+    const headerEl = headerRef.current;
+    if (!headerEl) return;
+
+    const updateHeaderHeight = () => {
+      const rect = headerEl.getBoundingClientRect();
+      if (rect.height > 0) {
+        setHeaderHeight(Math.ceil(rect.height));
+      }
+    };
+
+    updateHeaderHeight();
+
+    const observer = new ResizeObserver(() => {
+      updateHeaderHeight();
+    });
+    observer.observe(headerEl);
+    window.addEventListener('resize', updateHeaderHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeaderHeight);
+    };
+  }, [isMobileMode]);
+
+  // Scorrimento fluido al millimetro con compensazione in tempo reale del bordo inferiore dell'header
   const scrollToDay = (isoDay: string) => {
     const targetEl = document.getElementById(`day-${isoDay}`);
 
-    // Se il giorno è nascosto perché vuoto con il filtro attivo, disattiviamo temporaneamente il filtro
+    // Se il giorno è nascosto perché vuoto con il filtro attivo, disattiviamo il filtro e attendiamo il render
     if (!targetEl && onlyDaysWithContent) {
       setOnlyDaysWithContent(false);
-      setTimeout(() => {
-        const delayedEl = document.getElementById(`day-${isoDay}`);
-        if (delayedEl) {
-          executeScrollToElement(delayedEl, isoDay);
-        }
-      }, 60);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const delayedEl = document.getElementById(`day-${isoDay}`);
+          if (delayedEl) {
+            executeScrollToElement(delayedEl, isoDay);
+          }
+        });
+      });
       return;
     }
 
@@ -549,22 +593,51 @@ export default function App() {
   };
 
   const executeScrollToElement = (element: HTMLElement, isoDay: string) => {
-    const header = document.querySelector('header');
-    const headerHeight = header ? header.getBoundingClientRect().height : 220;
-    const elementPosition = element.getBoundingClientRect().top;
-    // Margine di respiro di 16px per staccare la card dall'header in modo arioso
-    const offsetPosition = elementPosition + window.pageYOffset - headerHeight - 16;
+    if (scrollAnimRef.current !== null) {
+      cancelAnimationFrame(scrollAnimRef.current);
+      scrollAnimRef.current = null;
+    }
 
-    window.scrollTo({
-      top: Math.max(0, offsetPosition),
-      behavior: 'smooth'
-    });
-
-    // Attiva evidenziazione visiva temporanea per 2.5 secondi
+    // Evidenziazione visiva del giorno selezionato per 2.5 secondi
     setHighlightedDay(isoDay);
     setTimeout(() => {
       setHighlightedDay((curr) => (curr === isoDay ? null : curr));
     }, 2500);
+
+    const startScrollY = window.scrollY;
+    const duration = 280; // ms
+    const startTime = performance.now();
+    const gapBelowHeader = 14; // 14px esatti tra il bordo inferiore dell'header e il bordo superiore della card
+
+    const animateScroll = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      const ease = 1 - Math.pow(1 - progress, 3); // Ease-out cubic
+
+      const headerEl = headerRef.current;
+      const currentHeaderBottom = headerEl
+        ? headerEl.getBoundingClientRect().bottom
+        : headerHeight;
+      const desiredViewportTop = currentHeaderBottom + gapBelowHeader;
+
+      const currentElementTop = element.getBoundingClientRect().top;
+      const targetScrollY = Math.max(
+        0,
+        window.scrollY + currentElementTop - desiredViewportTop
+      );
+
+      if (progress < 1) {
+        const nextScrollY = startScrollY + (targetScrollY - startScrollY) * ease;
+        window.scrollTo(0, nextScrollY);
+        scrollAnimRef.current = requestAnimationFrame(animateScroll);
+      } else {
+        // Posizionamento finale al pixel esatto sotto l'header
+        window.scrollTo(0, Math.round(targetScrollY));
+        scrollAnimRef.current = null;
+      }
+    };
+
+    scrollAnimRef.current = requestAnimationFrame(animateScroll);
   };
 
   
@@ -576,7 +649,7 @@ export default function App() {
   }, [startDateStr, endDateStr]);
 
   return (
-    <div className={`min-h-screen antialiased pb-16 print:bg-white print:text-black print:p-0 print:pb-0 ${
+    <div className={`min-h-screen antialiased pb-[75vh] print:bg-white print:text-black print:p-0 print:pb-0 ${
       isMobileMode 
         ? 'bg-slate-900 text-slate-100' 
         : 'bg-slate-100/90 text-slate-900'
@@ -585,7 +658,7 @@ export default function App() {
       {/* ======================================================== */}
       {/* 1. TOP HEADER SCURO MODERNO                               */}
       {/* ======================================================== */}
-      <header className="no-print bg-slate-900 border-b border-slate-800 sticky top-0 z-40 shadow-lg text-white">
+      <header ref={headerRef} className="no-print bg-slate-900 border-b border-slate-800 sticky top-0 z-40 shadow-lg text-white">
         {/* Riga Superiore: Brand, Indicatori di stato e Cambio Vista */}
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
           
@@ -967,6 +1040,7 @@ export default function App() {
                   <button
                     key={isoDay}
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => scrollToDay(isoDay)}
                     className={`px-2 py-1 rounded-lg border text-center shrink-0 transition cursor-pointer flex items-center gap-1 ${
                       count > 0 || hasNotes
@@ -1057,6 +1131,7 @@ export default function App() {
                 <div
                   key={isoDay}
                   id={`day-${isoDay}`}
+                  style={{ scrollMarginTop: `${headerHeight + 14}px` }}
                   onDragOver={(e) => {
                     if (!canEdit || isMobileMode) return;
                     e.preventDefault();
@@ -1069,7 +1144,7 @@ export default function App() {
                     handleDropOnDay(isoDay);
                     setDragOverDay(null);
                   }}
-                  className={`day-block group rounded-xl p-3 sm:p-4 border transition-all duration-300 scroll-mt-60 sm:scroll-mt-64 ${zebraClass} ${
+                  className={`day-block group rounded-xl p-3 sm:p-4 border transition-all duration-300 ${zebraClass} ${
                     highlightedDay === isoDay ? 'ring-3 ring-amber-400 bg-amber-50/80 shadow-lg' : ''
                   } ${
                     dragOverDay === isoDay ? 'ring-3 ring-blue-500 bg-blue-50/70 shadow-md' : ''

@@ -331,7 +331,7 @@ export const AppointmentModal: React.FC<Props> = ({
                     <span className="font-semibold text-slate-800">
                       {c.title ? `${c.title} ` : ''}{c.name}
                     </span>
-                    <span className="text-[11px] text-slate-400">{c.company || c.phone || ''}</span>
+                    <span className="text-[11px] text-slate-400">{c.company || c.address || c.phone || ''}</span>
                   </button>
                 ))}
               </div>

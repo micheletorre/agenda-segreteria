@@ -7,6 +7,7 @@ export interface Contact {
   phone?: string;
   email?: string;
   company?: string;
+  address?: string; // Indirizzo (non obbligatorio)
   notes?: string;
   created_at?: string;
 }

@@ -9,7 +9,8 @@ import {
   Edit2, 
   Trash2, 
   Check, 
-  BookUser
+  BookUser,
+  MapPin
 } from 'lucide-react';
 import type { Contact } from '../types';
 
@@ -40,6 +41,7 @@ export const ContactsModal: React.FC<Props> = ({
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
+  const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
 
   if (!isOpen) return null;
@@ -51,6 +53,7 @@ export const ContactsModal: React.FC<Props> = ({
     setPhone(c.phone || '');
     setEmail(c.email || '');
     setCompany(c.company || '');
+    setAddress(c.address || '');
     setNotes(c.notes || '');
     setIsAddingNew(true);
   };
@@ -62,6 +65,7 @@ export const ContactsModal: React.FC<Props> = ({
     setPhone('');
     setEmail('');
     setCompany('');
+    setAddress('');
     setNotes('');
     setIsAddingNew(true);
   };
@@ -77,6 +81,7 @@ export const ContactsModal: React.FC<Props> = ({
       phone: phone.trim(),
       email: email.trim(),
       company: company.trim(),
+      address: address.trim(),
       notes: notes.trim(),
       created_at: editingContact?.created_at || new Date().toISOString(),
     });
@@ -91,6 +96,7 @@ export const ContactsModal: React.FC<Props> = ({
       c.name.toLowerCase().includes(q) ||
       (c.title && c.title.toLowerCase().includes(q)) ||
       (c.company && c.company.toLowerCase().includes(q)) ||
+      (c.address && c.address.toLowerCase().includes(q)) ||
       (c.phone && c.phone.includes(q)) ||
       (c.email && c.email.toLowerCase().includes(q))
     );
@@ -125,7 +131,7 @@ export const ContactsModal: React.FC<Props> = ({
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Cerca per nome, società, telefono..."
+              placeholder="Cerca per nome, società, indirizzo, telefono..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-300 bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition"
@@ -172,6 +178,7 @@ export const ContactsModal: React.FC<Props> = ({
                   <option value="Avv.">Avv.</option>
                   <option value="Ing.">Ing.</option>
                   <option value="Arch.">Arch.</option>
+                  <option value="Geom.">Geom.</option>
                   <option value="Sig.">Sig.</option>
                   <option value="Sig.ra">Sig.ra</option>
                   <option value="">Nessuno</option>
@@ -224,6 +231,19 @@ export const ContactsModal: React.FC<Props> = ({
                   className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                <MapPin size={12} className="text-slate-400" /> Indirizzo (non obbligatorio)
+              </label>
+              <input
+                type="text"
+                placeholder="es. Via Flaminia 123, Roma"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500"
+              />
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
@@ -285,6 +305,11 @@ export const ContactsModal: React.FC<Props> = ({
                       <a href={`mailto:${contact.email}`} className="flex items-center gap-1 hover:text-blue-600">
                         <Mail size={12} className="text-slate-400" /> {contact.email}
                       </a>
+                    )}
+                    {contact.address && (
+                      <span className="flex items-center gap-1 text-slate-600">
+                        <MapPin size={12} className="text-amber-600 shrink-0" /> {contact.address}
+                      </span>
                     )}
                   </div>
                 </div>
