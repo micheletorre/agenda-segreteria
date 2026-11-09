@@ -10,7 +10,10 @@ import {
   Trash2, 
   Check, 
   BookUser,
-  MapPin
+  MapPin,
+  RefreshCw,
+  Cloud,
+  AlertCircle
 } from 'lucide-react';
 import type { Contact } from '../types';
 
@@ -21,6 +24,7 @@ interface Props {
   onSaveContact: (contact: Contact) => void;
   onDeleteContact: (id: string) => void;
   onSelectContact?: (contact: Contact) => void;
+  onSyncContacts?: () => Promise<{ success: boolean; count?: number; error?: string }>;
 }
 
 export const ContactsModal: React.FC<Props> = ({
@@ -30,10 +34,31 @@ export const ContactsModal: React.FC<Props> = ({
   onSaveContact,
   onDeleteContact,
   onSelectContact,
+  onSyncContacts,
 }) => {
   const [search, setSearch] = useState('');
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  const handleManualSync = async () => {
+    if (!onSyncContacts) return;
+    setIsSyncing(true);
+    setSyncStatus(null);
+    try {
+      const res = await onSyncContacts();
+      if (res.success) {
+        setSyncStatus({ text: `Sincronizzazione completata: ${res.count || contacts.length} contatti allineati nel Cloud.` });
+      } else {
+        setSyncStatus({ text: res.error || 'Errore durante la sincronizzazione.', isError: true });
+      }
+    } catch (err: any) {
+      setSyncStatus({ text: err?.message || 'Errore di connessione al Cloud.', isError: true });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Campi form
   const [title, setTitle] = useState('Dott.');
@@ -147,6 +172,22 @@ export const ContactsModal: React.FC<Props> = ({
             </button>
           )}
         </div>
+
+        {/* Banner stato sincronizzazione */}
+        {syncStatus && (
+          <div className={`px-4 py-2 text-xs flex items-center justify-between border-b ${syncStatus.isError ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-emerald-50 text-emerald-900 border-emerald-200'}`}>
+            <span className="flex items-center gap-1.5">
+              {syncStatus.isError ? <AlertCircle size={14} className="text-amber-600 shrink-0" /> : <Cloud size={14} className="text-emerald-600 shrink-0" />}
+              {syncStatus.text}
+            </span>
+            <button
+              onClick={() => setSyncStatus(null)}
+              className="text-slate-400 hover:text-slate-600 ml-2 font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Form Aggiunta / Modifica Rapida (collapsible) */}
         {isAddingNew && (
@@ -350,10 +391,24 @@ export const ContactsModal: React.FC<Props> = ({
 
         {/* Footer */}
         <div className="px-6 py-3 bg-slate-100 border-t border-slate-200 flex justify-between items-center text-xs text-slate-500">
-          <span>{contacts.length} contatti registrati in anagrafica</span>
+          <div className="flex items-center gap-2.5">
+            <span>{contacts.length} contatti registrati in anagrafica</span>
+            {onSyncContacts && (
+              <button
+                type="button"
+                onClick={handleManualSync}
+                disabled={isSyncing}
+                className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                title="Sincronizza subito i contatti con il database Cloud Supabase"
+              >
+                <RefreshCw size={12} className={isSyncing ? "animate-spin text-blue-600" : "text-blue-500"} />
+                {isSyncing ? 'Sincronizzazione...' : 'Sincronizza Cloud'}
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-semibold transition"
+            className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-semibold transition cursor-pointer"
           >
             Chiudi
           </button>

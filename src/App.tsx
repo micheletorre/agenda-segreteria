@@ -110,7 +110,23 @@ export default function App() {
 
   const [contacts, setContacts] = useState<Contact[]>(() => {
     const saved = localStorage.getItem('agenda_contacts');
-    return saved ? JSON.parse(saved) : INITIAL_CONTACTS;
+    if (!saved) return INITIAL_CONTACTS;
+    try {
+      const parsed: Contact[] = JSON.parse(saved);
+      // Unisci contatti predefiniti se non ancora presenti nella cache locale del browser
+      const existingNames = new Set(parsed.map((c) => c.name.toLowerCase().trim()));
+      const missingDefaults = INITIAL_CONTACTS.filter(
+        (c) => !existingNames.has(c.name.toLowerCase().trim())
+      );
+      if (missingDefaults.length > 0) {
+        const merged = [...parsed, ...missingDefaults];
+        localStorage.setItem('agenda_contacts', JSON.stringify(merged));
+        return merged;
+      }
+      return parsed;
+    } catch {
+      return INITIAL_CONTACTS;
+    }
   });
 
   const [lastUpdateDate, setLastUpdateDate] = useState<Date>(new Date());
@@ -204,16 +220,53 @@ export default function App() {
           localStorage.setItem('agenda_daily_notes', JSON.stringify(notesData));
         }
 
-        const { data: contactsData } = await client.from('contacts').select('*').order('name', { ascending: true });
-        if (contactsData && contactsData.length > 0) {
+        const { data: contactsData, error: contactsErr } = await client
+          .from('contacts')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (!contactsErr && contactsData) {
           const localSaved: Contact[] = JSON.parse(localStorage.getItem('agenda_contacts') || '[]');
-          const localMap = new Map(localSaved.map((c) => [c.id, c]));
-          const mergedContacts = contactsData.map((c: Contact) => ({
-            ...c,
-            address: c.address || localMap.get(c.id)?.address || '',
-          }));
-          setContacts(mergedContacts);
-          localStorage.setItem('agenda_contacts', JSON.stringify(mergedContacts));
+
+          if (contactsData.length === 0 && localSaved.length > 0) {
+            // Se la tabella su Supabase è appena stata creata ed è ancora vuota, sincronizza i contatti locali sul Cloud
+            for (const c of localSaved) {
+              try {
+                await client.from('contacts').upsert(c);
+              } catch {
+                // ignora
+              }
+            }
+          } else {
+            // Se ci sono contatti locali salvati prima che la tabella esistesse, caricali nel Cloud
+            const remoteMap = new Map(contactsData.map((c: Contact) => [c.id, c]));
+            const missingOnRemote = localSaved.filter((c) => !remoteMap.has(c.id));
+            if (missingOnRemote.length > 0) {
+              for (const c of missingOnRemote) {
+                try {
+                  await client.from('contacts').upsert(c);
+                } catch {
+                  // ignora
+                }
+              }
+            }
+
+            const localMap = new Map(localSaved.map((c) => [c.id, c]));
+            const mergedContacts: Contact[] = contactsData.map((c: Contact) => ({
+              ...c,
+              address: c.address || localMap.get(c.id)?.address || '',
+            }));
+
+            // Includi anche i contatti locali non ancora riscontrati nel Cloud
+            for (const loc of localSaved) {
+              if (!mergedContacts.some((m) => m.id === loc.id)) {
+                mergedContacts.push(loc);
+              }
+            }
+
+            setContacts(mergedContacts);
+            localStorage.setItem('agenda_contacts', JSON.stringify(mergedContacts));
+          }
         }
 
         setLastUpdateDate(new Date());
@@ -530,6 +583,41 @@ export default function App() {
 
     if (isSupabaseConfigured && supabase) {
       await supabase.from('contacts').delete().eq('id', id);
+    }
+  };
+
+  const handleSyncContacts = async (): Promise<{ success: boolean; count?: number; error?: string }> => {
+    if (!isSupabaseConfigured || !supabase) {
+      return { success: false, error: 'Database Supabase non configurato o non raggiungibile.' };
+    }
+    try {
+      for (const c of contacts) {
+        const { error } = await supabase.from('contacts').upsert(c);
+        if (error) {
+          if (error.code === 'PGRST205') {
+            return {
+              success: false,
+              error: "Tabella 'contacts' non presente nel database Supabase. È necessario eseguire lo script SQL su Supabase.",
+            };
+          }
+          if (error.code === '42703' || error.message?.includes('column') || error.message?.includes('address')) {
+            const { address, ...rest } = c;
+            await supabase.from('contacts').upsert(rest);
+          }
+        }
+      }
+
+      const { data, error: fetchErr } = await supabase.from('contacts').select('*').order('name', { ascending: true });
+      if (fetchErr) {
+        return { success: false, error: fetchErr.message };
+      }
+      if (data && data.length > 0) {
+        setContacts(data);
+        localStorage.setItem('agenda_contacts', JSON.stringify(data));
+      }
+      return { success: true, count: data?.length || contacts.length };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Errore durante la sincronizzazione' };
     }
   };
 
@@ -1565,6 +1653,7 @@ export default function App() {
         contacts={contacts}
         onSaveContact={handleSaveContact}
         onDeleteContact={handleDeleteContact}
+        onSyncContacts={handleSyncContacts}
       />
 
       <ShareModal

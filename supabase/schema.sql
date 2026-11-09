@@ -56,9 +56,10 @@ create policy "Allow all write on appointments" on appointments for all using (t
 create policy "Allow all read on daily_notes" on daily_notes for select using (true);
 create policy "Allow all write on daily_notes" on daily_notes for all using (true);
 
--- 4. Abilitazione Realtime su entrambe le tabelle
+-- 4. Abilitazione Realtime sulle tabelle
 alter publication supabase_realtime add table appointments;
 alter publication supabase_realtime add table daily_notes;
+alter publication supabase_realtime add table contacts;
 
 -- 5. Dati iniziali di test (coincidenti con la scansione)
 insert into appointments (id, date, time_label, referent, title, category, side_note) values

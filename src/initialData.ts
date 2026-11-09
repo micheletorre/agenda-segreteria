@@ -53,37 +53,76 @@ export const INITIAL_CONTACTS: Contact[] = [
   // Nuovi contatti e riferimenti richiesti
   {
     id: 'cont-7',
+    name: 'Bios Euclide',
+    company: 'Centro Medico',
+    address: 'Via Domenico Chelini, 39',
+    notes: 'Andare 15 minuti prima'
+  },
+  {
+    id: 'cont-8',
+    title: 'Dott.',
+    name: 'Antonio Gasbarrini',
+    address: 'Via Flaminia, 173'
+  },
+  {
+    id: 'cont-9',
+    title: 'Dott.ssa',
+    name: 'Laura Tessieri',
+    company: 'Quisisana',
+    address: 'Via Gian Giacomo Porro, 5'
+  },
+  {
+    id: 'cont-10',
+    title: 'Dott.ssa',
+    name: 'Debora Rasio',
+    address: 'Via Senafè, 27'
+  },
+  {
+    id: 'cont-11',
+    title: 'Dott.ssa',
+    name: 'Insalaco',
+    address: 'Via Antonio Chinotto, 1'
+  },
+  {
+    id: 'cont-12',
+    title: 'Dott.ssa',
+    name: 'Barbaro',
+    company: 'Ars Biomedica',
+    address: 'Via Luigi Bodio, 58'
+  },
+  {
+    id: 'cont-13',
     name: 'Milano V.',
     company: 'Studio Milano',
     notes: 'Riferimento interno'
   },
   {
-    id: 'cont-8',
+    id: 'cont-14',
     name: 'Torre M.',
     company: 'Consulenza Direzione',
     notes: 'Riferimento interno'
   },
   {
-    id: 'cont-9',
+    id: 'cont-15',
     name: 'Ferrante R.',
     company: 'Studio Ferrante',
     notes: 'Riferimento interno'
   },
   {
-    id: 'cont-10',
+    id: 'cont-16',
     name: 'Ricci A.',
     company: 'Gestione Immobili',
     notes: 'Riferimento interno'
   },
   {
-    id: 'cont-11',
+    id: 'cont-17',
     title: 'Geom.',
     name: 'Paolini D.',
     company: 'Studio Tecnico',
     notes: 'Referente tecnico'
   },
   {
-    id: 'cont-12',
+    id: 'cont-18',
     title: 'Avv.',
     name: 'Bonazzi',
     company: 'Studio Legale Bonazzi',
