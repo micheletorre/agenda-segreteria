@@ -448,7 +448,10 @@ export function usePortineriaShifts(dateIso: string): DayPortineriaShifts {
  */
 export const PORTINERIA_APP_URL = 'https://turni-portineria.vercel.app';
 
-export function getPortineriaUrlForDate(dateIso: string): string {
+export function getPortineriaUrlForDate(dateIso: string, isMobile: boolean = false): string {
+  if (isMobile) {
+    return `${PORTINERIA_APP_URL}/?vista=mobile&data=${dateIso}`;
+  }
   return `${PORTINERIA_APP_URL}/?vista=segreteria&data=${dateIso}`;
 }
 

@@ -837,7 +837,7 @@ export default function App() {
                     <UserPlus size={14} /> Ferie
                   </button>
                   <a
-                    href={getPortineriaUrlForDate(toISODate(new Date()))}
+                    href={getPortineriaUrlForDate(toISODate(new Date()), true)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-semibold text-xs transition cursor-pointer"
@@ -927,11 +927,11 @@ export default function App() {
                 )}
               </div>
               <a
-                href={getPortineriaUrlForDate(todayIso)}
+                href={getPortineriaUrlForDate(todayIso, true)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 shrink-0"
-                title="Apri l'app Turni Portineria per tutti i dettagli"
+                title="Apri la vista mobile pulita dei turni portineria"
               >
                 <span>Turni</span>
                 <ExternalLink size={10} />
