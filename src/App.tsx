@@ -112,18 +112,7 @@ export default function App() {
     const saved = localStorage.getItem('agenda_contacts');
     if (!saved) return INITIAL_CONTACTS;
     try {
-      const parsed: Contact[] = JSON.parse(saved);
-      // Unisci contatti predefiniti se non ancora presenti nella cache locale del browser
-      const existingNames = new Set(parsed.map((c) => c.name.toLowerCase().trim()));
-      const missingDefaults = INITIAL_CONTACTS.filter(
-        (c) => !existingNames.has(c.name.toLowerCase().trim())
-      );
-      if (missingDefaults.length > 0) {
-        const merged = [...parsed, ...missingDefaults];
-        localStorage.setItem('agenda_contacts', JSON.stringify(merged));
-        return merged;
-      }
-      return parsed;
+      return JSON.parse(saved);
     } catch {
       return INITIAL_CONTACTS;
     }
@@ -228,47 +217,19 @@ export default function App() {
           .order('name', { ascending: true });
 
         if (!contactsErr && contactsData) {
-          const localSaved: Contact[] = JSON.parse(localStorage.getItem('agenda_contacts') || '[]');
-
-          if (contactsData.length === 0 && localSaved.length > 0) {
-            // Se la tabella su Supabase è appena stata creata ed è ancora vuota, sincronizza i contatti locali sul Cloud
-            for (const c of localSaved) {
-              try {
-                await client.from('contacts').upsert(c);
-              } catch {
-                // ignora
-              }
+          // Supabase è la sorgente unica di verità: deduplica per sicurezza per nome
+          const seenNames = new Set<string>();
+          const cleanContacts: Contact[] = [];
+          for (const c of contactsData) {
+            const key = (c.name || '').toLowerCase().trim();
+            if (key && !seenNames.has(key)) {
+              seenNames.add(key);
+              cleanContacts.push(c);
             }
-          } else {
-            // Se ci sono contatti locali salvati prima che la tabella esistesse, caricali nel Cloud
-            const remoteMap = new Map(contactsData.map((c: Contact) => [c.id, c]));
-            const missingOnRemote = localSaved.filter((c) => !remoteMap.has(c.id));
-            if (missingOnRemote.length > 0) {
-              for (const c of missingOnRemote) {
-                try {
-                  await client.from('contacts').upsert(c);
-                } catch {
-                  // ignora
-                }
-              }
-            }
-
-            const localMap = new Map(localSaved.map((c) => [c.id, c]));
-            const mergedContacts: Contact[] = contactsData.map((c: Contact) => ({
-              ...c,
-              address: c.address || localMap.get(c.id)?.address || '',
-            }));
-
-            // Includi anche i contatti locali non ancora riscontrati nel Cloud
-            for (const loc of localSaved) {
-              if (!mergedContacts.some((m) => m.id === loc.id)) {
-                mergedContacts.push(loc);
-              }
-            }
-
-            setContacts(mergedContacts);
-            localStorage.setItem('agenda_contacts', JSON.stringify(mergedContacts));
           }
+
+          setContacts(cleanContacts);
+          localStorage.setItem('agenda_contacts', JSON.stringify(cleanContacts));
         }
 
         setLastUpdateDate(new Date());
@@ -354,7 +315,7 @@ export default function App() {
       const allFutureDays = getDaysBetween(todayIso, maxDate);
       const busyDays = allFutureDays.filter((isoDay) => {
         const hasApps = appointments.some(
-          (a) => a.date === isoDay && !a.is_concluded
+          (a) => a.date === isoDay && (showConcluded || !a.is_concluded)
         );
         const hasNotes = dailyNotes.some(
           (n) => isoDay >= n.start_date && isoDay <= n.end_date
@@ -436,8 +397,11 @@ export default function App() {
       try {
         const { error } = await supabase.from('appointments').upsert(appToSave);
         if (error && (error.code === '42703' || error.message?.includes('column'))) {
-          const { for_gatehouse, location, is_concluded, ...rest } = appToSave;
-          await supabase.from('appointments').upsert(rest);
+          const fallbackObj: any = { ...appToSave };
+          if (error.message?.includes('is_concluded')) delete fallbackObj.is_concluded;
+          if (error.message?.includes('for_gatehouse')) delete fallbackObj.for_gatehouse;
+          if (error.message?.includes('location')) delete fallbackObj.location;
+          await supabase.from('appointments').upsert(fallbackObj);
         }
       } catch (err) {
         console.warn('Errore sincronizzazione Supabase:', err);
@@ -559,19 +523,31 @@ export default function App() {
 
   // CRUD Contatti Anagrafica
   const handleSaveContact = async (contact: Contact) => {
+    let contactToSave = { ...contact };
+    const existingByName = contacts.find(
+      (c) => c.name.toLowerCase().trim() === contact.name.toLowerCase().trim()
+    );
+    if (existingByName && existingByName.id !== contact.id) {
+      contactToSave = {
+        ...existingByName,
+        ...contact,
+        id: existingByName.id,
+      };
+    }
+
     setContacts((prev) => {
-      const exists = prev.some((c) => c.id === contact.id);
+      const exists = prev.some((c) => c.id === contactToSave.id);
       if (exists) {
-        return prev.map((c) => (c.id === contact.id ? contact : c));
+        return prev.map((c) => (c.id === contactToSave.id ? contactToSave : c));
       }
-      return [...prev, contact];
+      return [...prev, contactToSave];
     });
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('contacts').upsert(contact);
+        const { error } = await supabase.from('contacts').upsert(contactToSave);
         if (error && (error.code === '42703' || error.message?.includes('column') || error.message?.includes('address'))) {
-          const { address, ...rest } = contact;
+          const { address, ...rest } = contactToSave;
           await supabase.from('contacts').upsert(rest);
         }
       } catch (err) {
@@ -1329,7 +1305,7 @@ export default function App() {
                 .filter((a) => {
                   const matchesDate = a.date === isoDay;
                   if (!matchesDate) return false;
-                  if ((isMobileMode || !showConcluded) && a.is_concluded) return false;
+                  if (!showConcluded && a.is_concluded) return false;
                   if (isMobileMode || !searchQuery.trim()) return true;
                   const q = searchQuery.toLowerCase();
                   return (

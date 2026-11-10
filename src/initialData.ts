@@ -59,7 +59,7 @@ export const INITIAL_CONTACTS: Contact[] = [
     notes: 'Andare 15 minuti prima'
   },
   {
-    id: 'cont-8',
+    id: 'cont-1794235944892',
     title: 'Dott.',
     name: 'Antonio Gasbarrini',
     address: 'Via Flaminia, 173'

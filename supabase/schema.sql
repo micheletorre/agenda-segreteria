@@ -16,6 +16,10 @@ create table if not exists appointments (
   updated_at timestamptz default now()
 );
 
+alter table appointments add column if not exists for_gatehouse boolean default false;
+alter table appointments add column if not exists location text default '';
+alter table appointments add column if not exists is_concluded boolean default false;
+
 -- 2. Tabella Ferie e Note di Giornata
 create table if not exists daily_notes (
   id text primary key default gen_random_uuid()::text,
@@ -26,6 +30,10 @@ create table if not exists daily_notes (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+alter table appointments add column if not exists for_gatehouse boolean default false;
+alter table appointments add column if not exists location text default '';
+alter table appointments add column if not exists is_concluded boolean default false;
 
 -- 2b. Tabella Contatti Anagrafica
 create table if not exists contacts (
