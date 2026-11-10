@@ -62,18 +62,22 @@ export const GatehouseModal: React.FC<Props> = ({
   // Turni e custodi in servizio nella data selezionata (in tempo reale da Supabase Cloud)
   const portineriaShifts = usePortineriaShifts(selectedDate);
 
-  const activeCustodiansSummary = useMemo(() => {
-    const list: string[] = [];
-    if (portineriaShifts.mattina.length > 0) {
-      list.push(`Mattina: ${portineriaShifts.mattina.map((p) => p.nome).join(', ')}`);
-    }
-    if (portineriaShifts.cavallo.length > 0) {
-      list.push(`Cavallo: ${portineriaShifts.cavallo.map((p) => p.nome).join(', ')}`);
-    }
-    if (portineriaShifts.pomeriggio.length > 0) {
-      list.push(`Pomeriggio: ${portineriaShifts.pomeriggio.map((p) => p.nome).join(', ')}`);
-    }
-    return list.join(' · ');
+  // Lista ordinata dei custodi in servizio per la firma del foglio
+  const custodiansForSignature = useMemo(() => {
+    const list: { nome: string; turno: string; orario?: string }[] = [];
+    portineriaShifts.mattina.forEach((p) =>
+      list.push({ nome: p.nome, turno: 'Mattina', orario: p.orario })
+    );
+    portineriaShifts.cavallo.forEach((p) =>
+      list.push({ nome: p.nome, turno: 'Cavallo', orario: p.orario })
+    );
+    portineriaShifts.pomeriggio.forEach((p) =>
+      list.push({ nome: p.nome, turno: 'Pomeriggio', orario: p.orario })
+    );
+    portineriaShifts.notte.forEach((p) =>
+      list.push({ nome: p.nome, turno: 'Notte', orario: p.orario })
+    );
+    return list;
   }, [portineriaShifts]);
 
   // Numero di righe vuote per riempire il foglio A4 (almeno 24 righe totali per simulare il modulo originale)
@@ -478,20 +482,37 @@ export const GatehouseModal: React.FC<Props> = ({
                   <div className="border-b border-black w-4/5 h-6"></div>
                 </div>
 
-                {/* Destra: Firma Portiere per Visione con righe tratteggiate */}
-                <div className="space-y-2">
-                  <div className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-black">
+                {/* Destra: Firma Portiere per Visione con nome del dipendente di fianco alla riga */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-black pb-0.5">
                     NOME E FIRMA PORTIERE PER VISIONE
-                    {activeCustodiansSummary && (
-                      <span className="block text-[10px] font-normal normal-case text-slate-700 mt-0.5">
-                        In servizio: {activeCustodiansSummary}
-                      </span>
-                    )}
                   </div>
-                  <div className="border-b border-dotted border-black h-4 w-full"></div>
-                  <div className="border-b border-dotted border-black h-4 w-full"></div>
-                  <div className="border-b border-dotted border-black h-4 w-full"></div>
-                  <div className="border-b border-dotted border-black h-4 w-full"></div>
+                  {custodiansForSignature.length > 0 ? (
+                    custodiansForSignature.map((c, idx) => (
+                      <div key={idx} className="flex items-end justify-between gap-3 pt-0.5">
+                        <span className="text-[11px] sm:text-xs font-bold text-black shrink-0 min-w-[135px]">
+                          {c.nome} <span className="text-[10px] font-normal text-slate-700">({c.turno})</span>:
+                        </span>
+                        <div className="border-b border-dotted border-black flex-1 h-4"></div>
+                      </div>
+                    ))
+                  ) : (
+                    <>
+                      <div className="border-b border-dotted border-black h-4 w-full"></div>
+                      <div className="border-b border-dotted border-black h-4 w-full"></div>
+                      <div className="border-b border-dotted border-black h-4 w-full"></div>
+                      <div className="border-b border-dotted border-black h-4 w-full"></div>
+                    </>
+                  )}
+                  {/* Se ci sono meno di 3 portieri in servizio (es. la domenica), aggiungi riga per eventuale sostituto */}
+                  {custodiansForSignature.length > 0 && custodiansForSignature.length < 3 && (
+                    <div className="flex items-end justify-between gap-3 pt-0.5">
+                      <span className="text-[10px] text-slate-500 italic shrink-0 min-w-[135px]">
+                        Altro / Sostituto:
+                      </span>
+                      <div className="border-b border-dotted border-black flex-1 h-4"></div>
+                    </div>
+                  )}
                 </div>
               </div>
 

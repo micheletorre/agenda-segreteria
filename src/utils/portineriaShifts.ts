@@ -451,3 +451,24 @@ export const PORTINERIA_APP_URL = 'https://turni-portineria.vercel.app';
 export function getPortineriaUrlForDate(dateIso: string): string {
   return `${PORTINERIA_APP_URL}/?vista=segreteria&data=${dateIso}`;
 }
+
+/**
+ * Determina se un turno con orario (es. "07:00 - 15:00", "22:00 - 07:00") è attivo adesso
+ */
+export function isShiftActiveNow(orario?: string): boolean {
+  if (!orario) return false;
+  const match = orario.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+  if (!match) return false;
+
+  const now = new Date();
+  const curMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const startMinutes = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+  const endMinutes = parseInt(match[3], 10) * 60 + parseInt(match[4], 10);
+
+  if (endMinutes > startMinutes) {
+    return curMinutes >= startMinutes && curMinutes < endMinutes;
+  }
+  // Turno notturno attraverso la mezzanotte (es. 22:00 - 07:00)
+  return curMinutes >= startMinutes || curMinutes < endMinutes;
+}

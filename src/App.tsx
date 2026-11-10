@@ -47,7 +47,7 @@ import { ContactsModal } from './components/ContactsModal';
 import { ShareModal } from './components/ShareModal';
 import { GatehouseModal } from './components/GatehouseModal';
 import { PinModal } from './components/PinModal';
-import { usePortineriaShifts, getPortineriaUrlForDate } from './utils/portineriaShifts';
+import { usePortineriaShifts, getPortineriaUrlForDate, isShiftActiveNow } from './utils/portineriaShifts';
 
 // Nome applicazione configurabile (pronto per essere personalizzato su indicazione della segreteria)
 export const APP_NAME = 'AGENDA SEGRETERIA';
@@ -167,6 +167,8 @@ export default function App() {
 
   // Custodi in servizio in portineria per la data consultata (sincronizzati in tempo reale dal database Cloud di Turni Portineria)
   const activeGateShifts = usePortineriaShifts(startDateStr);
+  const todayIso = toISODate(new Date());
+  const todayGateShifts = usePortineriaShifts(todayIso);
 
   // Drag & drop state
   const [draggedAppId, setDraggedAppId] = useState<string | null>(null);
@@ -930,6 +932,135 @@ export default function App() {
           )}
 
         </div>
+
+        {/* ======================================================== */}
+        {/* SU MOBILE: BARRA PORTIERI IN SERVIZIO OGGI (IN TEMPO REALE) */}
+        {/* ======================================================== */}
+        {isMobileMode && (
+          <div className="bg-slate-950/95 border-t border-slate-800/90 px-3.5 py-2">
+            <div className="flex items-center justify-between text-xs mb-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-slate-200">
+                <ShieldCheck size={14} className="text-emerald-400 shrink-0" />
+                <span>
+                  Portineria Oggi ({todayGateShifts.giornoNome.slice(0, 3)} {todayIso.split('-').slice(1).reverse().join('/')}):
+                </span>
+                {todayGateShifts.isReale && (
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1 py-0.2 rounded font-bold">
+                    Live
+                  </span>
+                )}
+              </div>
+              <a
+                href={getPortineriaUrlForDate(todayIso)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 shrink-0"
+                title="Apri l'app Turni Portineria per tutti i dettagli"
+              >
+                <span>Turni</span>
+                <ExternalLink size={10} />
+              </a>
+            </div>
+
+            {/* Chips orizzontali dei turni con indicatore in tempo reale di chi è in servizio ADESSO */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+              {todayGateShifts.mattina.map((p) => {
+                const active = isShiftActiveNow(p.orario);
+                return (
+                  <div
+                    key={`m-${p.nome}`}
+                    className={`shrink-0 px-2 py-1 rounded-lg text-xs flex items-center gap-1.5 border transition ${
+                      active
+                        ? 'bg-amber-500/20 text-amber-200 border-amber-400/50 shadow-xs ring-1 ring-amber-400/30 font-bold'
+                        : 'bg-slate-800/80 text-slate-300 border-slate-700/80 font-medium'
+                    }`}
+                  >
+                    {active ? (
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" title="In servizio ORA" />
+                    ) : (
+                      <span className="text-[11px]">☀️</span>
+                    )}
+                    <span>{p.nome}</span>
+                    <span className="text-[10px] text-slate-400 font-normal">({p.orario ? p.orario.replace(/\s+/g, '') : 'Mattina'})</span>
+                  </div>
+                );
+              })}
+
+              {todayGateShifts.cavallo.map((p) => {
+                const active = isShiftActiveNow(p.orario);
+                return (
+                  <div
+                    key={`c-${p.nome}`}
+                    className={`shrink-0 px-2 py-1 rounded-lg text-xs flex items-center gap-1.5 border transition ${
+                      active
+                        ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/50 shadow-xs ring-1 ring-emerald-400/30 font-bold'
+                        : 'bg-slate-800/80 text-slate-300 border-slate-700/80 font-medium'
+                    }`}
+                  >
+                    {active ? (
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" title="In servizio ORA" />
+                    ) : (
+                      <span className="text-[11px]">🌿</span>
+                    )}
+                    <span>{p.nome}</span>
+                    <span className="text-[10px] text-slate-400 font-normal">({p.orario ? p.orario.replace(/\s+/g, '') : 'Cavallo'})</span>
+                  </div>
+                );
+              })}
+
+              {todayGateShifts.pomeriggio.map((p) => {
+                const active = isShiftActiveNow(p.orario);
+                return (
+                  <div
+                    key={`p-${p.nome}`}
+                    className={`shrink-0 px-2 py-1 rounded-lg text-xs flex items-center gap-1.5 border transition ${
+                      active
+                        ? 'bg-sky-500/20 text-sky-200 border-sky-400/50 shadow-xs ring-1 ring-sky-400/30 font-bold'
+                        : 'bg-slate-800/80 text-slate-300 border-slate-700/80 font-medium'
+                    }`}
+                  >
+                    {active ? (
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" title="In servizio ORA" />
+                    ) : (
+                      <span className="text-[11px]">🌇</span>
+                    )}
+                    <span>{p.nome}</span>
+                    <span className="text-[10px] text-slate-400 font-normal">({p.orario ? p.orario.replace(/\s+/g, '') : 'Pomeriggio'})</span>
+                  </div>
+                );
+              })}
+
+              {todayGateShifts.notte.map((p) => {
+                const active = isShiftActiveNow(p.orario);
+                return (
+                  <div
+                    key={`n-${p.nome}`}
+                    className={`shrink-0 px-2 py-1 rounded-lg text-xs flex items-center gap-1.5 border transition ${
+                      active
+                        ? 'bg-purple-500/20 text-purple-200 border-purple-400/50 shadow-xs ring-1 ring-purple-400/30 font-bold'
+                        : 'bg-slate-800/80 text-slate-300 border-slate-700/80 font-medium'
+                    }`}
+                  >
+                    {active ? (
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" title="In servizio ORA" />
+                    ) : (
+                      <span className="text-[11px]">🌙</span>
+                    )}
+                    <span>{p.nome}</span>
+                    <span className="text-[10px] text-slate-400 font-normal">({p.orario ? p.orario.replace(/\s+/g, '') : 'Notte'})</span>
+                  </div>
+                );
+              })}
+
+              {todayGateShifts.mattina.length === 0 &&
+                todayGateShifts.cavallo.length === 0 &&
+                todayGateShifts.pomeriggio.length === 0 &&
+                todayGateShifts.notte.length === 0 && (
+                  <span className="text-xs text-slate-400 italic">Nessun portiere registrato in servizio per oggi</span>
+                )}
+            </div>
+          </div>
+        )}
 
         {/* ======================================================== */}
         {/* RIGA INFERIORE (SOLO DESKTOP): SELETTORE DATE E FILTRI   */}
