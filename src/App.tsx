@@ -48,6 +48,7 @@ import { ContactsModal } from './components/ContactsModal';
 import { ShareModal } from './components/ShareModal';
 import { GatehouseModal } from './components/GatehouseModal';
 import { PinModal } from './components/PinModal';
+import { InSedeIcon, UscitaIcon } from './components/CategoryIcons';
 import { usePortineriaShifts, getPortineriaUrlForDate, isShiftActiveNow } from './utils/portineriaShifts';
 
 // Nome applicazione configurabile (pronto per essere personalizzato su indicazione della segreteria)
@@ -1512,14 +1513,14 @@ export default function App() {
                             {/* Riga Inferiore Mobile: Titolo ed eventuale Nota */}
                             <div className="pt-1.5 text-xs font-semibold leading-relaxed">
                               {app.category === 'internal_red' ? (
-                                <span className="text-red-700 font-bold inline-flex items-center gap-1">
-                                  <Building2 size={13} className="text-red-600 shrink-0" />
-                                  {app.title}
+                                <span className="text-red-700 font-bold inline-flex items-center gap-1.5">
+                                  <InSedeIcon size={13} className="text-red-600" />
+                                  <span>{app.title}</span>
                                 </span>
                               ) : app.category === 'external_yellow' ? (
-                                <span className="bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded font-bold inline-flex items-center gap-1">
-                                  <DoorOpen size={13} className="text-amber-800 shrink-0" />
-                                  {app.title}
+                                <span className="bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded font-bold inline-flex items-center gap-1.5">
+                                  <UscitaIcon size={13} className="text-amber-950" />
+                                  <span>{app.title}</span>
                                 </span>
                               ) : (
                                 <span className="text-slate-900">{app.title}</span>
@@ -1587,12 +1588,12 @@ export default function App() {
                               <div className="min-w-0 flex-1">
                                 {app.category === 'internal_red' ? (
                                   <span className="text-base sm:text-lg font-bold text-red-600 print-red flex items-baseline gap-1.5">
-                                    <Building2 size={15} className="text-red-500 shrink-0 inline self-center print:hidden" title="In Sede (Riceve)" />
+                                    <InSedeIcon size={16} className="text-red-500" />
                                     <span>{app.title}</span>
                                   </span>
                                 ) : app.category === 'external_yellow' ? (
                                   <span className="text-base sm:text-lg font-bold bg-amber-200 text-amber-950 px-2 py-0.5 rounded-xs print-yellow inline-flex items-center gap-1.5">
-                                    <DoorOpen size={15} className="text-amber-800 shrink-0 inline print:hidden" title="Uscita / Fuori Sede" />
+                                    <UscitaIcon size={15} className="text-amber-950" />
                                     <span>{app.title}</span>
                                   </span>
                                 ) : (

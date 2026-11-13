@@ -15,6 +15,7 @@ import {
   DoorOpen
 } from 'lucide-react';
 import type { Appointment, AppointmentCategory, Contact } from '../types';
+import { InSedeIcon, UscitaIcon } from './CategoryIcons';
 
 interface Props {
   isOpen: boolean;
@@ -378,7 +379,7 @@ export const AppointmentModal: React.FC<Props> = ({
                 }`}
               >
                 <div className="text-xs text-red-600 font-semibold flex items-center gap-1">
-                  <Building2 size={13} /> Sede (Riceve)
+                  <InSedeIcon size={14} className="text-red-600" /> Sede (Riceve)
                 </div>
                 <div className="text-sm font-bold text-red-700">Testo Rosso</div>
               </button>
@@ -393,7 +394,7 @@ export const AppointmentModal: React.FC<Props> = ({
                 }`}
               >
                 <div className="text-xs text-amber-700 font-semibold flex items-center gap-1">
-                  <DoorOpen size={13} /> Uscita (Esterno)
+                  <UscitaIcon size={14} className="text-amber-800" /> Uscita (Esterno)
                 </div>
                 <div className="text-sm font-bold bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded">Giallo Soft</div>
               </button>
