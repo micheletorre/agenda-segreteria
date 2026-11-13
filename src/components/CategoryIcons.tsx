@@ -15,11 +15,9 @@ export const InSedeIcon: React.FC<IconProps> = ({
   className = 'text-red-600' 
 }) => {
   return (
-    <Building2 
-      size={size} 
-      className={`${className} shrink-0 inline self-center print:hidden`} 
-      title="In Sede (Riceve)" 
-    />
+    <span className="inline-flex items-center shrink-0 self-center print:hidden" title="In Sede (Riceve)">
+      <Building2 size={size} className={className} />
+    </span>
   );
 };
 

@@ -10,9 +10,7 @@ import {
   Check, 
   UserPlus,
   ShieldCheck,
-  MapPin,
-  Building2,
-  DoorOpen
+  MapPin
 } from 'lucide-react';
 import type { Appointment, AppointmentCategory, Contact } from '../types';
 import { InSedeIcon, UscitaIcon } from './CategoryIcons';
