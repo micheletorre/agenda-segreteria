@@ -90,3 +90,49 @@ export function getDaysBetween(startDateIso: string, endDateIso: string): string
 
   return result;
 }
+
+/**
+ * Converte etichette di orario (es. "h 09.00", "10:30", "in mattinata", "nel pomeriggio")
+ * in minuti dal giorno (0..1440) per l'ordinamento cronologico rigoroso.
+ */
+export function parseTimeToMinutes(timeLabel?: string | null): number {
+  if (!timeLabel) return 9999;
+  const clean = timeLabel.toLowerCase().trim();
+
+  // 1. Orari con minuti: "h 09.00", "09:30", "9.15", "h 15:00", "ore 10.30"
+  const matchHoursMinutes = clean.match(/(?:h\s*|\bore\s*)?(\d{1,2})[:.](\d{2})/);
+  if (matchHoursMinutes) {
+    const hours = parseInt(matchHoursMinutes[1], 10);
+    const minutes = parseInt(matchHoursMinutes[2], 10);
+    return hours * 60 + minutes;
+  }
+
+  // 2. Orari con sola ora: "h 9", "h 10", "ore 11"
+  const matchOnlyHours = clean.match(/(?:h\s*|\bore\s*)(\d{1,2})\b/);
+  if (matchOnlyHours) {
+    const hours = parseInt(matchOnlyHours[1], 10);
+    return hours * 60;
+  }
+
+  // 3. Etichette descrittive di fascia oraria
+  if (clean.includes('mattina') || clean.includes('mattinata') || clean.includes('presto')) {
+    return 8 * 60 + 30; // 08:30
+  }
+  if (clean.includes('seguire')) {
+    return 11 * 60 + 30; // 11:30
+  }
+  if (clean.includes('pranzo') || clean.includes('mezzogiorno')) {
+    return 13 * 60; // 13:00
+  }
+  if (clean.includes('pomeriggio')) {
+    return 14 * 60 + 30; // 14:30
+  }
+  if (clean.includes('sera') || clean.includes('serata')) {
+    return 18 * 60; // 18:00
+  }
+  if (clean.includes('giornata') || clean.includes('chiusura')) {
+    return 20 * 60; // 20:00
+  }
+
+  return 9999;
+}

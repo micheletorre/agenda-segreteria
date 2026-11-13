@@ -16,6 +16,7 @@ import {
   Calendar as CalendarIcon,
   CalendarPlus,
   Building2,
+  DoorOpen,
   CheckCircle2,
   FileText,
   ShieldCheck,
@@ -1512,11 +1513,12 @@ export default function App() {
                             <div className="pt-1.5 text-xs font-semibold leading-relaxed">
                               {app.category === 'internal_red' ? (
                                 <span className="text-red-700 font-bold inline-flex items-center gap-1">
-                                  <CheckCircle2 size={13} className="text-red-600 shrink-0" />
+                                  <Building2 size={13} className="text-red-600 shrink-0" />
                                   {app.title}
                                 </span>
                               ) : app.category === 'external_yellow' ? (
-                                <span className="bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded font-bold inline-block">
+                                <span className="bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded font-bold inline-flex items-center gap-1">
+                                  <DoorOpen size={13} className="text-amber-800 shrink-0" />
                                   {app.title}
                                 </span>
                               ) : (
@@ -1584,13 +1586,13 @@ export default function App() {
                               {/* Descrizione / Titolo con codifica cromatica */}
                               <div className="min-w-0 flex-1">
                                 {app.category === 'internal_red' ? (
-                                  <span className="text-base sm:text-lg font-bold text-red-600 print-red flex items-baseline gap-1">
-                                    <CheckCircle2 size={14} className="text-red-500 shrink-0 inline self-center print:hidden" />
+                                  <span className="text-base sm:text-lg font-bold text-red-600 print-red flex items-baseline gap-1.5">
+                                    <Building2 size={15} className="text-red-500 shrink-0 inline self-center print:hidden" title="In Sede (Riceve)" />
                                     <span>{app.title}</span>
                                   </span>
                                 ) : app.category === 'external_yellow' ? (
-                                  <span className="text-base sm:text-lg font-bold bg-amber-200 text-amber-950 px-2 py-0.5 rounded-xs print-yellow inline-flex items-center gap-1">
-                                    <Building2 size={13} className="text-amber-800 shrink-0 inline print:hidden" />
+                                  <span className="text-base sm:text-lg font-bold bg-amber-200 text-amber-950 px-2 py-0.5 rounded-xs print-yellow inline-flex items-center gap-1.5">
+                                    <DoorOpen size={15} className="text-amber-800 shrink-0 inline print:hidden" title="Uscita / Fuori Sede" />
                                     <span>{app.title}</span>
                                   </span>
                                 ) : (

@@ -8,7 +8,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import type { Appointment } from '../types';
-import { toISODate, formatGatehouseDate } from '../utils/dateUtils';
+import { toISODate, formatGatehouseDate, parseTimeToMinutes } from '../utils/dateUtils';
 import { usePortineriaShifts, getPortineriaUrlForDate } from '../utils/portineriaShifts';
 
 interface Props {
@@ -49,14 +49,28 @@ export const GatehouseModal: React.FC<Props> = ({
     return toISODate(d);
   }, []);
 
-  // Tutti gli appuntamenti della data selezionata
+  // Tutti gli appuntamenti della data selezionata, rigorosamente in ordine cronologico
   const dayAppointments = useMemo(() => {
-    return appointments.filter((a) => a.date === selectedDate);
+    return appointments
+      .filter((a) => a.date === selectedDate)
+      .sort((a, b) => {
+        const timeA = parseTimeToMinutes(a.time_label);
+        const timeB = parseTimeToMinutes(b.time_label);
+        if (timeA !== timeB) return timeA - timeB;
+        return (a.order_index ?? 0) - (b.order_index ?? 0);
+      });
   }, [appointments, selectedDate]);
 
-  // Appuntamenti abilitati per la portineria (for_gatehouse === true)
+  // Appuntamenti abilitati per la portineria (for_gatehouse === true), sempre in ordine cronologico / di arrivo
   const gatehouseItems = useMemo(() => {
-    return dayAppointments.filter((a) => a.for_gatehouse);
+    return dayAppointments
+      .filter((a) => a.for_gatehouse)
+      .sort((a, b) => {
+        const timeA = parseTimeToMinutes(a.time_label);
+        const timeB = parseTimeToMinutes(b.time_label);
+        if (timeA !== timeB) return timeA - timeB;
+        return (a.order_index ?? 0) - (b.order_index ?? 0);
+      });
   }, [dayAppointments]);
 
   // Turni e custodi in servizio nella data selezionata (in tempo reale da Supabase Cloud)

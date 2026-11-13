@@ -10,7 +10,9 @@ import {
   Check, 
   UserPlus,
   ShieldCheck,
-  MapPin
+  MapPin,
+  Building2,
+  DoorOpen
 } from 'lucide-react';
 import type { Appointment, AppointmentCategory, Contact } from '../types';
 
@@ -369,27 +371,31 @@ export const AppointmentModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => setCategory('internal_red')}
-                className={`p-2.5 rounded-xl border text-center transition cursor-pointer ${
+                className={`p-2.5 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
                   category === 'internal_red'
                     ? 'border-red-500 bg-red-50 ring-2 ring-red-400'
                     : 'border-slate-200 hover:bg-red-50/50'
                 }`}
               >
-                <div className="text-xs text-red-600 mb-0.5">AU Riceve</div>
+                <div className="text-xs text-red-600 font-semibold flex items-center gap-1">
+                  <Building2 size={13} /> Sede (Riceve)
+                </div>
                 <div className="text-sm font-bold text-red-700">Testo Rosso</div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setCategory('external_yellow')}
-                className={`p-2.5 rounded-xl border text-center transition cursor-pointer ${
+                className={`p-2.5 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
                   category === 'external_yellow'
                     ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-400'
                     : 'border-slate-200 hover:bg-amber-50/50'
                 }`}
               >
-                <div className="text-xs text-amber-700 mb-0.5">AU Fuori sede</div>
-                <div className="text-sm font-bold bg-amber-200 text-amber-950 px-1 rounded">Giallo Soft</div>
+                <div className="text-xs text-amber-700 font-semibold flex items-center gap-1">
+                  <DoorOpen size={13} /> Uscita (Esterno)
+                </div>
+                <div className="text-sm font-bold bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded">Giallo Soft</div>
               </button>
             </div>
           </div>
