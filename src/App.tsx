@@ -152,6 +152,7 @@ export default function App() {
   // Filtri vista
   const [onlyDaysWithContent, setOnlyDaysWithContent] = useState<boolean>(true); // Nasconde giorni vuoti
   const [showConcluded, setShowConcluded] = useState<boolean>(false); // Mostra archivio conclusi
+  const [showGatehouseOnly, setShowGatehouseOnly] = useState<boolean>(false); // Mostra voci solo portineria
 
   // Custodi in servizio in portineria per la data consultata (sincronizzati in tempo reale dal database Cloud di Turni Portineria)
   const activeGateShifts = usePortineriaShifts(startDateStr);
@@ -288,12 +289,12 @@ export default function App() {
   const appsCountByDate = useMemo(() => {
     const map = new Map<string, number>();
     for (const a of appointments) {
-      if (!a.is_concluded || showConcluded) {
+      if ((!a.is_concluded || showConcluded) && (!a.gatehouse_only || showGatehouseOnly)) {
         map.set(a.date, (map.get(a.date) || 0) + 1);
       }
     }
     return map;
-  }, [appointments, showConcluded]);
+  }, [appointments, showConcluded, showGatehouseOnly]);
 
   // In modalità Desktop l'editing è sempre attivo; su Mobile si attiva col lucchetto (PIN 1967)
   const canEdit = !isMobileMode || isAdminUnlocked;
@@ -306,7 +307,7 @@ export default function App() {
       const todayIso = toISODate(new Date());
       let maxDate = todayIso;
       for (const a of appointments) {
-        if (!a.is_concluded && a.date > maxDate) maxDate = a.date;
+        if (!a.is_concluded && (!a.gatehouse_only || showGatehouseOnly) && a.date > maxDate) maxDate = a.date;
       }
       for (const n of dailyNotes) {
         if (n.end_date > maxDate) maxDate = n.end_date;
@@ -314,7 +315,7 @@ export default function App() {
       const allFutureDays = getDaysBetween(todayIso, maxDate);
       const busyDays = allFutureDays.filter((isoDay) => {
         const hasApps = appointments.some(
-          (a) => a.date === isoDay && (showConcluded || !a.is_concluded)
+          (a) => a.date === isoDay && (showConcluded || !a.is_concluded) && (!a.gatehouse_only || showGatehouseOnly)
         );
         const hasNotes = dailyNotes.some(
           (n) => isoDay >= n.start_date && isoDay <= n.end_date
@@ -327,7 +328,7 @@ export default function App() {
     if (!onlyDaysWithContent) return visibleDays;
     const filtered = visibleDays.filter((isoDay) => {
       const hasApps = appointments.some(
-        (a) => a.date === isoDay && (showConcluded || !a.is_concluded)
+        (a) => a.date === isoDay && (showConcluded || !a.is_concluded) && (!a.gatehouse_only || showGatehouseOnly)
       );
       const hasNotes = dailyNotes.some(
         (n) => isoDay >= n.start_date && isoDay <= n.end_date
@@ -335,10 +336,14 @@ export default function App() {
       return hasApps || hasNotes;
     });
     return filtered.length > 0 ? filtered : visibleDays.slice(0, 1);
-  }, [isMobileMode, visibleDays, appointments, dailyNotes, onlyDaysWithContent, showConcluded]);
+  }, [isMobileMode, visibleDays, appointments, dailyNotes, onlyDaysWithContent, showConcluded, showGatehouseOnly]);
 
   const concludedCount = useMemo(() => {
     return appointments.filter((a) => a.is_concluded).length;
+  }, [appointments]);
+
+  const gatehouseOnlyCount = useMemo(() => {
+    return appointments.filter((a) => a.gatehouse_only && !a.is_concluded).length;
   }, [appointments]);
 
   const handlePinSuccess = () => {
@@ -399,6 +404,7 @@ export default function App() {
           const fallbackObj: any = { ...appToSave };
           if (error.message?.includes('is_concluded')) delete fallbackObj.is_concluded;
           if (error.message?.includes('for_gatehouse')) delete fallbackObj.for_gatehouse;
+          if (error.message?.includes('gatehouse_only')) delete fallbackObj.gatehouse_only;
           if (error.message?.includes('location')) delete fallbackObj.location;
           await supabase.from('appointments').upsert(fallbackObj);
         }
@@ -1176,6 +1182,21 @@ export default function App() {
                   <Archive size={13} />
                   Conclusi ({concludedCount})
                 </button>
+
+                {gatehouseOnlyCount > 0 && (
+                  <button
+                    onClick={() => setShowGatehouseOnly(!showGatehouseOnly)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition cursor-pointer ${
+                      showGatehouseOnly
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs ring-1 ring-amber-400/30'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                    }`}
+                    title="Mostra o nascondi le voci registrate ad uso esclusivo del foglio portineria"
+                  >
+                    <ShieldCheck size={13} className="text-emerald-400" />
+                    Solo Portineria ({gatehouseOnlyCount})
+                  </button>
+                )}
               </div>
 
               {/* Ricerca Rapida Impegni o Ditte */}
@@ -1305,6 +1326,7 @@ export default function App() {
                   const matchesDate = a.date === isoDay;
                   if (!matchesDate) return false;
                   if (!showConcluded && a.is_concluded) return false;
+                  if (!showGatehouseOnly && a.gatehouse_only) return false;
                   if (isMobileMode || !searchQuery.trim()) return true;
                   const q = searchQuery.toLowerCase();
                   return (
@@ -1527,6 +1549,11 @@ export default function App() {
                                   {app.side_note}
                                 </span>
                               )}
+                              {app.gatehouse_only && (
+                                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shrink-0">
+                                  <ShieldCheck size={9} className="text-emerald-700" /> Solo Portineria
+                                </span>
+                              )}
                             </div>
                           </div>
                         ) : (
@@ -1608,6 +1635,13 @@ export default function App() {
                                 <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-200 text-slate-800 border border-slate-300 inline-flex items-center gap-1 shrink-0 print:border-black">
                                   <MapPin size={11} className="print:hidden text-slate-500" />
                                   {app.location}
+                                </span>
+                              )}
+
+                              {/* Badge Solo Portineria */}
+                              {app.gatehouse_only && (
+                                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shrink-0 print:hidden" title="Visibile esclusivamente nel foglio portineria">
+                                  <ShieldCheck size={12} className="text-emerald-700" /> Solo Portineria
                                 </span>
                               )}
 

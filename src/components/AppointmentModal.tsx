@@ -10,6 +10,7 @@ import {
   Check, 
   UserPlus,
   ShieldCheck,
+  EyeOff,
   MapPin
 } from 'lucide-react';
 import type { Appointment, AppointmentCategory, Contact } from '../types';
@@ -44,6 +45,7 @@ export const AppointmentModal: React.FC<Props> = ({
   const [sideNote, setSideNote] = useState('');
   const [location, setLocation] = useState('');
   const [forGatehouse, setForGatehouse] = useState(false);
+  const [gatehouseOnly, setGatehouseOnly] = useState(false);
   const [contactId, setContactId] = useState<string | undefined>(undefined);
 
   // Autocomplete contatti
@@ -73,6 +75,7 @@ export const AppointmentModal: React.FC<Props> = ({
       setSideNote(initialData.side_note || '');
       setLocation(initialData.location || '');
       setForGatehouse(Boolean(initialData.for_gatehouse));
+      setGatehouseOnly(Boolean(initialData.gatehouse_only));
       setContactId(initialData.contact_id);
     } else {
       setDate(defaultDate || new Date().toISOString().split('T')[0]);
@@ -83,6 +86,7 @@ export const AppointmentModal: React.FC<Props> = ({
       setSideNote('');
       setLocation('');
       setForGatehouse(false); // Default spento come richiesto
+      setGatehouseOnly(false);
       setContactId(undefined);
     }
     setShowContactPicker(false);
@@ -110,6 +114,7 @@ export const AppointmentModal: React.FC<Props> = ({
       side_note: formattedSideNote,
       contact_id: contactId,
       for_gatehouse: forGatehouse,
+      gatehouse_only: forGatehouse && gatehouseOnly,
       location: location.trim(),
     });
     onClose();
@@ -440,7 +445,7 @@ export const AppointmentModal: React.FC<Props> = ({
           </div>
 
           {/* TOGGLE PER FOGLIO PORTINERIA */}
-          <div className="pt-1">
+          <div className="pt-1 space-y-2">
             <label className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition ${
               forGatehouse
                 ? 'bg-emerald-50/90 border-emerald-300 ring-1 ring-emerald-400'
@@ -469,10 +474,50 @@ export const AppointmentModal: React.FC<Props> = ({
               <input
                 type="checkbox"
                 checked={forGatehouse}
-                onChange={(e) => setForGatehouse(e.target.checked)}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setForGatehouse(val);
+                  if (!val) setGatehouseOnly(false);
+                }}
                 className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
               />
             </label>
+
+            {/* SOTTO-OPZIONE: SOLO PORTINERIA (NASCONDI DALL'AGENDA DI DIREZIONE) */}
+            {forGatehouse && (
+              <label className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ml-4 ${
+                gatehouseOnly
+                  ? 'bg-amber-50/90 border-amber-300 ring-1 ring-amber-400'
+                  : 'bg-slate-50/90 border-slate-200 hover:bg-slate-100/70'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-1.5 rounded-lg transition ${
+                    gatehouseOnly ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-500'
+                  }`}>
+                    <EyeOff size={16} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      Mostra SOLO sul Foglio Portineria
+                      {gatehouseOnly && (
+                        <span className="text-[9px] font-bold uppercase bg-amber-600 text-white px-1.5 py-0.2 rounded">
+                          Solo Portineria
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Nasconde la voce dall'agenda di direzione e la mantiene solo per i portieri (es. ditte, tecnici, manutenzioni)
+                    </div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={gatehouseOnly}
+                  onChange={(e) => setGatehouseOnly(e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                />
+              </label>
+            )}
           </div>
 
           {/* Bottoni footer */}

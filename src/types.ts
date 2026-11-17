@@ -23,6 +23,7 @@ export interface Appointment {
   side_note?: string; // e.g. '(Paolini)', '(Ricci F.)'
   contact_id?: string;
   for_gatehouse?: boolean; // Flag per includere nel foglio portineria
+  gatehouse_only?: boolean; // Se true, visibile SOLO nel foglio portineria (nascosto dall'agenda di direzione)
   location?: string; // Sede / Luogo specifico (es. DEAS, Boehringer, Intesa Sanpaolo, ecc.)
   is_concluded?: boolean; // Depubblicato / concluso (nascosto dalla vista 2 settimane, ma conservato in storico)
 }

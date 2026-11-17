@@ -41,6 +41,7 @@ export const GatehouseModal: React.FC<Props> = ({
   const [newLocation, setNewLocation] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newNote, setNewNote] = useState('');
+  const [newOnlyGatehouse, setNewOnlyGatehouse] = useState(true);
 
   const todayIso = useMemo(() => toISODate(new Date()), []);
   const tomorrowIso = useMemo(() => {
@@ -131,10 +132,12 @@ export const GatehouseModal: React.FC<Props> = ({
       side_note: formattedSideNote,
       category: 'standard',
       for_gatehouse: true,
+      gatehouse_only: newOnlyGatehouse,
     });
 
     setNewDesc('');
     setNewNote('');
+    setNewOnlyGatehouse(true);
     setShowQuickAdd(false);
   };
 
@@ -326,15 +329,27 @@ export const GatehouseModal: React.FC<Props> = ({
                   required
                 />
               </div>
-              <div className="flex items-center justify-between pt-1">
-                <input
-                  type="text"
-                  placeholder="Referente interno tra parentesi (es. Paolini, Ferrante)"
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 text-slate-800 max-w-sm w-full"
-                />
-                <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 max-w-xl w-full">
+                  <input
+                    type="text"
+                    placeholder="Referente interno tra parentesi (es. Paolini, Ferrante)"
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 text-slate-800 flex-1"
+                  />
+                  <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer select-none shrink-0 bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={newOnlyGatehouse}
+                      onChange={(e) => setNewOnlyGatehouse(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded text-amber-600 accent-amber-600 cursor-pointer"
+                    />
+                    <span className="font-medium text-slate-800">Solo Portineria</span>
+                    <span className="text-[10px] text-slate-500">(non mostrare in agenda)</span>
+                  </label>
+                </div>
+                <div className="flex gap-2 shrink-0 self-end sm:self-auto">
                   <button
                     type="button"
                     onClick={() => setShowQuickAdd(false)}
@@ -383,6 +398,11 @@ export const GatehouseModal: React.FC<Props> = ({
                       {app.location && (
                         <span className="px-1.5 py-0.5 rounded bg-slate-200/80 text-[10px] font-bold text-slate-700 shrink-0">
                           {app.location}
+                        </span>
+                      )}
+                      {app.gatehouse_only && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold shrink-0 border border-amber-300">
+                          Solo Portineria
                         </span>
                       )}
                       <span className="truncate">{app.title}</span>
