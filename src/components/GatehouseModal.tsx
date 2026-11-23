@@ -6,12 +6,14 @@ import {
   Plus, 
   Trash2,
   ExternalLink,
-  CheckCircle2
+  CheckCircle2,
+  RefreshCw,
+  XCircle
 } from 'lucide-react';
 import type { Appointment } from '../types';
 import { toISODate, formatGatehouseDate, parseTimeToMinutes } from '../utils/dateUtils';
 import { usePortineriaShifts, getPortineriaUrlForDate } from '../utils/portineriaShifts';
-import { syncDateToPortineria, type PortineriaAppointmentItem } from '../utils/portineriaSync';
+import { syncDateToPortineria, isEndOfDayPassed, type PortineriaAppointmentItem } from '../utils/portineriaSync';
 
 interface Props {
   isOpen: boolean;
@@ -46,6 +48,20 @@ export const GatehouseModal: React.FC<Props> = ({
   const [newDesc, setNewDesc] = useState('');
   const [newNote, setNewNote] = useState('');
   const [newOnlyGatehouse, setNewOnlyGatehouse] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncDone, setSyncDone] = useState(false);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    setSyncDone(false);
+    try {
+      await syncDateToPortineria(selectedDate, appointments);
+      setSyncDone(true);
+      setTimeout(() => setSyncDone(false), 2600);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const todayIso = useMemo(() => toISODate(new Date()), []);
   const tomorrowIso = useMemo(() => {
@@ -223,12 +239,27 @@ export const GatehouseModal: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Azioni Rapide Stampa e Aggiungi */}
-            <div className="flex items-center gap-2 ml-auto">
+            {/* Azioni Rapide Stampa, Sincronizza e Aggiungi */}
+            <div className="flex items-center gap-2 ml-auto flex-wrap">
+              <button
+                type="button"
+                onClick={handleManualSync}
+                disabled={isSyncing}
+                title="Forza l'invio immediato di questa giornata al Registro Accessi della Portineria"
+                className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap ${
+                  syncDone
+                    ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
+                    : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                }`}
+              >
+                <RefreshCw size={13} className={`${isSyncing ? 'animate-spin' : ''} shrink-0`} />
+                <span>{syncDone ? 'Sincronizzato ✓' : isSyncing ? 'Sincronizzazione...' : 'Sincronizza ora'}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowQuickAdd(!showQuickAdd)}
-                className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
               >
                 <Plus size={14} className="text-emerald-600" />
                 {showQuickAdd ? 'Chiudi inserimento' : '+ Aggiungi Accesso Rapido'}
@@ -237,7 +268,7 @@ export const GatehouseModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={handlePrint}
-                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer"
+                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer whitespace-nowrap"
               >
                 <Printer size={15} />
                 Stampa Foglio A4
@@ -426,6 +457,14 @@ export const GatehouseModal: React.FC<Props> = ({
                             <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0 border border-emerald-300 inline-flex items-center gap-1 whitespace-nowrap">
                               <CheckCircle2 size={10} className="text-emerald-700 shrink-0" />
                               Arrivato {arrival.oraArrivo ? `ore ${arrival.oraArrivo}` : ''}
+                            </span>
+                          );
+                        }
+                        if (arrival?.nonArrivato || isEndOfDayPassed(selectedDate)) {
+                          return (
+                            <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] font-bold shrink-0 border border-slate-300 inline-flex items-center gap-1 whitespace-nowrap">
+                              <XCircle size={10} className="text-slate-500 shrink-0" />
+                              Non arrivato
                             </span>
                           );
                         }

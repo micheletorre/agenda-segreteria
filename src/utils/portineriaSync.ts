@@ -27,9 +27,24 @@ export interface PortineriaAppointmentItem {
   conAutomezzo?: boolean;  // true se arriva in auto
   targa?: string;          // targa eventuale
   arrivato?: boolean;      // impostato a true dalla Portineria allo smarcamento
+  nonArrivato?: boolean;   // chiuso automaticamente a fine giornata se non arrivato
   oraArrivo?: string;      // "HH:mm" impostato dalla Portineria
   scalaArrivo?: 'SCALA A' | 'SCALA B';
   operatoreArrivo?: string;
+}
+
+/**
+ * Verifica se la giornata dell'appuntamento è conclusa (data passata oppure dopo le 22:00 del giorno corrente).
+ */
+export function isEndOfDayPassed(dataStr: string, now: Date = new Date()): boolean {
+  if (!dataStr) return false;
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const oggiStr = `${y}-${m}-${d}`;
+  if (dataStr < oggiStr) return true;
+  if (dataStr === oggiStr && now.getHours() >= 22) return true;
+  return false;
 }
 
 /**
@@ -152,6 +167,7 @@ export async function syncDateToPortineria(dataStr: string, allAppointments: App
         conAutomezzo: existing?.conAutomezzo ?? false,
         targa: existing?.targa || undefined,
         arrivato: existing?.arrivato ?? false,
+        nonArrivato: existing?.nonArrivato ?? false,
         oraArrivo: existing?.oraArrivo,
         scalaArrivo: existing?.scalaArrivo,
         operatoreArrivo: existing?.operatoreArrivo,

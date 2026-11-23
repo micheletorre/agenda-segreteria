@@ -27,7 +27,8 @@ import {
   Lock,
   Unlock,
   ExternalLink,
-  CheckCircle2
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import type { Appointment, DailyNote, Contact } from './types';
 import { INITIAL_APPOINTMENTS, INITIAL_DAILY_NOTES, INITIAL_CONTACTS } from './initialData';
@@ -54,6 +55,7 @@ import {
   portineriaSupabase,
   syncDateToPortineria,
   fetchPortineriaStatusMapForDates,
+  isEndOfDayPassed,
   CLOUD_KEY_APPUNTAMENTI_PREFIX,
   type PortineriaAppointmentItem,
 } from './utils/portineriaSync';
@@ -1717,6 +1719,17 @@ export default function App() {
                                     </span>
                                   );
                                 }
+                                if (arrival?.nonArrivato || isEndOfDayPassed(app.date)) {
+                                  return (
+                                    <span 
+                                      className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap"
+                                      title="Chiuso a fine giornata: ospite non arrivato"
+                                    >
+                                      <XCircle size={10} className="text-slate-500 shrink-0" />
+                                      <span>Non arrivato</span>
+                                    </span>
+                                  );
+                                }
                                 return (
                                   <span 
                                     className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1 shrink-0 whitespace-nowrap"
@@ -1832,6 +1845,17 @@ export default function App() {
                                         Arrivato ore {arrival.oraArrivo || '--:--'}
                                         {arrival.scalaArrivo ? ` · ${arrival.scalaArrivo}` : ''}
                                       </span>
+                                    </span>
+                                  );
+                                }
+                                if (arrival?.nonArrivato || isEndOfDayPassed(app.date)) {
+                                  return (
+                                    <span 
+                                      className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-1.5 shrink-0 print:hidden whitespace-nowrap"
+                                      title="Chiuso automaticamente a fine giornata: ospite non arrivato"
+                                    >
+                                      <XCircle size={13} className="text-slate-500 shrink-0" />
+                                      <span>Non arrivato</span>
                                     </span>
                                   );
                                 }
