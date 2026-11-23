@@ -422,12 +422,9 @@ export default function App() {
     };
   }, [displayDays, appointments]);
 
-  // Sincronizzazione automatica iniziale su Portineria di tutti gli appuntamenti da oggi in poi già spuntati
-  const hasInitialSyncedRef = useRef(false);
+  // Sincronizzazione automatica su Portineria di tutti gli appuntamenti da oggi in poi già spuntati
   useEffect(() => {
-    if (appointments.length === 0 || hasInitialSyncedRef.current) return;
-    hasInitialSyncedRef.current = true;
-
+    if (appointments.length === 0) return;
     const todayStr = toISODate(new Date());
     const activeDates = Array.from(
       new Set(

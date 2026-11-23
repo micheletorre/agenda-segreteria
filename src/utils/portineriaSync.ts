@@ -168,18 +168,29 @@ export async function syncDateToPortineria(dataStr: string, allAppointments: App
       return (a.nominativo || '').localeCompare(b.nominativo || '');
     });
 
-    // 5. Upsert su registro_segnalazioni
-    const payload = {
+    // 5. Upsert su registro_segnalazioni (colonne: data_str, segnalazioni, note_generali, ultimo_aggiornamento)
+    const payload: any = {
       data_str: getCloudKeyForDate(dataStr),
       segnalazioni: mergedItems,
-      updated_at: new Date().toISOString(),
       note_generali: `Appuntamenti attesi in portineria per il ${dataStr}`,
       ultimo_aggiornamento: new Date().toISOString(),
     };
 
-    const { error } = await portineriaSupabase
+    let { error } = await portineriaSupabase
       .from('registro_segnalazioni')
       .upsert(payload, { onConflict: 'data_str' });
+
+    if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
+      // Fallback a sole colonne strettamente necessarie
+      const fallbackPayload = {
+        data_str: getCloudKeyForDate(dataStr),
+        segnalazioni: mergedItems,
+      };
+      const res = await portineriaSupabase
+        .from('registro_segnalazioni')
+        .upsert(fallbackPayload, { onConflict: 'data_str' });
+      error = res.error;
+    }
 
     if (error) {
       console.warn('Avviso sincronizzazione Portineria Supabase:', error.message);

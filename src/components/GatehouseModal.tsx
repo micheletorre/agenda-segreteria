@@ -11,7 +11,7 @@ import {
 import type { Appointment } from '../types';
 import { toISODate, formatGatehouseDate, parseTimeToMinutes } from '../utils/dateUtils';
 import { usePortineriaShifts, getPortineriaUrlForDate } from '../utils/portineriaShifts';
-import type { PortineriaAppointmentItem } from '../utils/portineriaSync';
+import { syncDateToPortineria, type PortineriaAppointmentItem } from '../utils/portineriaSync';
 
 interface Props {
   isOpen: boolean;
@@ -53,6 +53,13 @@ export const GatehouseModal: React.FC<Props> = ({
     d.setDate(d.getDate() + 1);
     return toISODate(d);
   }, []);
+
+  // Assicura che la data attualmente visualizzata nel foglio sia sempre sincronizzata su Portineria
+  React.useEffect(() => {
+    if (isOpen && selectedDate) {
+      syncDateToPortineria(selectedDate, appointments);
+    }
+  }, [isOpen, selectedDate, appointments]);
 
   // Tutti gli appuntamenti della data selezionata, rigorosamente in ordine cronologico
   const dayAppointments = useMemo(() => {
