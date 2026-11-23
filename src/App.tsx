@@ -422,6 +422,26 @@ export default function App() {
     };
   }, [displayDays, appointments]);
 
+  // Sincronizzazione automatica iniziale su Portineria di tutti gli appuntamenti da oggi in poi già spuntati
+  const hasInitialSyncedRef = useRef(false);
+  useEffect(() => {
+    if (appointments.length === 0 || hasInitialSyncedRef.current) return;
+    hasInitialSyncedRef.current = true;
+
+    const todayStr = toISODate(new Date());
+    const activeDates = Array.from(
+      new Set(
+        appointments
+          .filter((a) => a.date >= todayStr && a.for_gatehouse && !a.is_concluded)
+          .map((a) => a.date)
+      )
+    );
+
+    for (const d of activeDates) {
+      syncDateToPortineria(d, appointments);
+    }
+  }, [appointments]);
+
   const handlePinSuccess = () => {
     sessionStorage.setItem('agenda_admin_unlocked', 'true');
     setIsAdminUnlocked(true);
