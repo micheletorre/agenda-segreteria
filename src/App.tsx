@@ -12,6 +12,7 @@ import {
   Wifi,
   WifiOff,
   BookUser,
+  BookOpen,
   Share2,
   Calendar as CalendarIcon,
   CalendarPlus,
@@ -45,6 +46,7 @@ import { ContactsModal } from './components/ContactsModal';
 import { ShareModal } from './components/ShareModal';
 import { GatehouseModal } from './components/GatehouseModal';
 import { PinModal } from './components/PinModal';
+import { ProjectManualView } from './components/ProjectManualView';
 import { InSedeIcon, UscitaIcon } from './components/CategoryIcons';
 import { usePortineriaShifts, getPortineriaUrlForDate, isShiftActiveNow } from './utils/portineriaShifts';
 
@@ -173,7 +175,13 @@ export default function App() {
 
   const [isContactsModalOpen, setIsContactsModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-    const [isGatehouseModalOpen, setIsGatehouseModalOpen] = useState(false);
+  const [isGatehouseModalOpen, setIsGatehouseModalOpen] = useState(false);
+  const [isManualViewOpen, setIsManualViewOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const s = window.location.search || '';
+    const h = window.location.hash || '';
+    return s.includes('vista=manuale') || s.includes('vista=dossier') || h.includes('manuale') || h.includes('dossier');
+  });
 
   // Monitoraggio dinamico larghezza schermo (mobile vs desktop)
   useEffect(() => {
@@ -719,6 +727,10 @@ export default function App() {
     return `${formatHeaderDate(s)} — ${formatHeaderDate(e)}`;
   }, [startDateStr, endDateStr]);
 
+  if (isManualViewOpen) {
+    return <ProjectManualView onBackToAgenda={() => setIsManualViewOpen(false)} />;
+  }
+
   return (
     <div className={`min-h-screen antialiased pb-[75vh] print:bg-white print:text-black print:p-0 print:pb-0 ${
       isMobileMode 
@@ -811,6 +823,14 @@ export default function App() {
           {/* SU MOBILE: Lucchetto Area Segreteria per emergenze (PIN 1967) */}
           {isMobileMode && (
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setIsManualViewOpen(true)}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 shadow-xs transition cursor-pointer"
+                title="Dossier Funzionale per la Proprietà"
+              >
+                <BookOpen size={13} className="text-amber-400" /> Dossier
+              </button>
+
               {!isAdminUnlocked ? (
                 <button
                   onClick={() => setIsPinModalOpen(true)}
@@ -908,6 +928,15 @@ export default function App() {
                 title="Stampa diretta del periodo selezionato (A4 Montserrat)"
               >
                 <Printer size={14} /> Stampa A4
+              </button>
+
+              <button
+                onClick={() => setIsManualViewOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer whitespace-nowrap"
+                title="Dossier di Presentazione Funzionale & Sostenibilità Economica per la Proprietà"
+              >
+                <BookOpen size={14} className="text-amber-400" />
+                <span>Dossier Progetto</span>
               </button>
             </div>
           )}
