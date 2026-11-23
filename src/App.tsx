@@ -1782,15 +1782,15 @@ export default function App() {
                               </span>
 
                               {/* Descrizione / Titolo con codifica cromatica */}
-                              <div className="min-w-0 flex-1">
+                              <div className="min-w-0 flex-1 break-words">
                                 {app.category === 'internal_red' ? (
-                                  <span className="text-base sm:text-lg font-bold text-red-600 print-red flex items-baseline gap-1.5">
-                                    <InSedeIcon size={16} className="text-red-500" />
+                                  <span className="text-base sm:text-lg font-bold text-red-600 print-red inline-flex items-baseline gap-1.5 flex-wrap">
+                                    <InSedeIcon size={16} className="text-red-500 self-center shrink-0" />
                                     <span>{app.title}</span>
                                   </span>
                                 ) : app.category === 'external_yellow' ? (
-                                  <span className="text-base sm:text-lg font-bold bg-amber-200 text-amber-950 px-2 py-0.5 rounded-xs print-yellow inline-flex items-center gap-1.5">
-                                    <UscitaIcon size={15} className="text-amber-950" />
+                                  <span className="text-base sm:text-lg font-bold bg-amber-200 text-amber-950 px-2 py-0.5 rounded-xs print-yellow inline-flex items-center gap-1.5 flex-wrap">
+                                    <UscitaIcon size={15} className="text-amber-950 self-center shrink-0" />
                                     <span>{app.title}</span>
                                   </span>
                                 ) : (
