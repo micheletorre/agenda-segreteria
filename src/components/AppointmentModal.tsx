@@ -11,10 +11,12 @@ import {
   UserPlus,
   ShieldCheck,
   EyeOff,
-  MapPin
+  MapPin,
+  CheckCircle2
 } from 'lucide-react';
 import type { Appointment, AppointmentCategory, Contact } from '../types';
 import { InSedeIcon, UscitaIcon } from './CategoryIcons';
+import type { PortineriaAppointmentItem } from '../utils/portineriaSync';
 
 interface Props {
   isOpen: boolean;
@@ -25,6 +27,7 @@ interface Props {
   defaultDate?: string;
   contacts?: Contact[];
   onQuickSaveContact?: (contact: Contact) => void;
+  arrivalStatus?: PortineriaAppointmentItem | null;
 }
 
 export const AppointmentModal: React.FC<Props> = ({
@@ -36,6 +39,7 @@ export const AppointmentModal: React.FC<Props> = ({
   defaultDate,
   contacts = [],
   onQuickSaveContact,
+  arrivalStatus,
 }) => {
   const [date, setDate] = useState('');
   const [timeLabel, setTimeLabel] = useState('');
@@ -517,6 +521,26 @@ export const AppointmentModal: React.FC<Props> = ({
                   className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer accent-amber-600"
                 />
               </label>
+            )}
+
+            {/* AVVISO DI STATO ARRIVO SMARCATO DALLA PORTINERIA */}
+            {forGatehouse && arrivalStatus && arrivalStatus.arrivato && (
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs">
+                <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-bold text-emerald-900 flex items-center gap-2">
+                    <span>Arrivo registrato al varco di portineria</span>
+                    <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[10px] font-bold">
+                      Ore {arrivalStatus.oraArrivo || '--:--'}
+                    </span>
+                  </div>
+                  <div className="text-emerald-800 text-[11px] mt-0.5">
+                    {arrivalStatus.scalaArrivo ? `Postazione: ${arrivalStatus.scalaArrivo}` : 'Portineria'}
+                    {arrivalStatus.operatoreArrivo ? ` · Custode in turno: ${arrivalStatus.operatoreArrivo}` : ''}
+                    {arrivalStatus.targa ? ` · Targa mezzo: ${arrivalStatus.targa}` : ''}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 

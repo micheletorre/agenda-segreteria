@@ -5,11 +5,13 @@ import {
   ShieldCheck, 
   Plus, 
   Trash2,
-  ExternalLink
+  ExternalLink,
+  CheckCircle2
 } from 'lucide-react';
 import type { Appointment } from '../types';
 import { toISODate, formatGatehouseDate, parseTimeToMinutes } from '../utils/dateUtils';
 import { usePortineriaShifts, getPortineriaUrlForDate } from '../utils/portineriaShifts';
+import type { PortineriaAppointmentItem } from '../utils/portineriaSync';
 
 interface Props {
   isOpen: boolean;
@@ -18,6 +20,7 @@ interface Props {
   onToggleGatehouse: (id: string, forGatehouse: boolean) => void;
   onQuickAddAccess: (item: Partial<Appointment>) => void;
   onDeleteAppointment?: (id: string) => void;
+  portineriaArrivalMap?: Map<string, PortineriaAppointmentItem>;
 }
 
 export const GatehouseModal: React.FC<Props> = ({
@@ -27,6 +30,7 @@ export const GatehouseModal: React.FC<Props> = ({
   onToggleGatehouse,
   onQuickAddAccess,
   onDeleteAppointment,
+  portineriaArrivalMap,
 }) => {
   // Data selezionata di default: domani (la segreteria stampa la sera per il giorno dopo)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -407,6 +411,23 @@ export const GatehouseModal: React.FC<Props> = ({
                       )}
                       <span className="truncate">{app.title}</span>
                       {app.side_note && <span className="text-slate-500 shrink-0">{app.side_note}</span>}
+
+                      {app.for_gatehouse && (() => {
+                        const arrival = portineriaArrivalMap?.get(app.id);
+                        if (arrival?.arrivato) {
+                          return (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0 border border-emerald-300 inline-flex items-center gap-1 whitespace-nowrap">
+                              <CheckCircle2 size={10} className="text-emerald-700 shrink-0" />
+                              Arrivato {arrival.oraArrivo ? `ore ${arrival.oraArrivo}` : ''}
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 text-[10px] font-semibold shrink-0 border border-amber-200 inline-flex items-center gap-1 whitespace-nowrap">
+                            In attesa
+                          </span>
+                        );
+                      })()}
                     </label>
 
                     {onDeleteAppointment && (

@@ -26,7 +26,8 @@ import {
   Check,
   Lock,
   Unlock,
-  ExternalLink
+  ExternalLink,
+  CheckCircle2
 } from 'lucide-react';
 import type { Appointment, DailyNote, Contact } from './types';
 import { INITIAL_APPOINTMENTS, INITIAL_DAILY_NOTES, INITIAL_CONTACTS } from './initialData';
@@ -49,6 +50,13 @@ import { PinModal } from './components/PinModal';
 import { ProjectManualView } from './components/ProjectManualView';
 import { InSedeIcon, UscitaIcon } from './components/CategoryIcons';
 import { usePortineriaShifts, getPortineriaUrlForDate, isShiftActiveNow } from './utils/portineriaShifts';
+import {
+  portineriaSupabase,
+  syncDateToPortineria,
+  fetchPortineriaStatusMapForDates,
+  CLOUD_KEY_APPUNTAMENTI_PREFIX,
+  type PortineriaAppointmentItem,
+} from './utils/portineriaSync';
 
 // Nome applicazione configurabile (pronto per essere personalizzato su indicazione della segreteria)
 export const APP_NAME = 'AGENDA SEGRETERIA';
@@ -354,6 +362,66 @@ export default function App() {
     return appointments.filter((a) => a.gatehouse_only && !a.is_concluded).length;
   }, [appointments]);
 
+  // Mappa in tempo reale dello stato arrivi degli appuntamenti su Supabase Portineria
+  const [portineriaArrivalMap, setPortineriaArrivalMap] = useState<Map<string, PortineriaAppointmentItem>>(new Map());
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // Raccoglie tutte le date rilevanti: giorni visibili + tutte le date con for_gatehouse attivo
+    const gatehouseDates = appointments
+      .filter((a) => a.for_gatehouse)
+      .map((a) => a.date);
+    const uniqueDates = Array.from(new Set([...displayDays, ...gatehouseDates]));
+
+    const loadStatuses = async () => {
+      if (uniqueDates.length === 0) return;
+      const statusMap = await fetchPortineriaStatusMapForDates(uniqueDates);
+      if (isMounted) {
+        setPortineriaArrivalMap(statusMap);
+      }
+    };
+
+    loadStatuses();
+
+    // Sottoscrizione Realtime alla tabella registro_segnalazioni del database di Portineria
+    const channel = portineriaSupabase
+      .channel('agenda-portineria-status-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'registro_segnalazioni',
+        },
+        (payload) => {
+          const newRow = payload.new as { data_str?: string; segnalazioni?: PortineriaAppointmentItem[] } | null;
+          if (
+            newRow &&
+            newRow.data_str &&
+            newRow.data_str.startsWith(CLOUD_KEY_APPUNTAMENTI_PREFIX) &&
+            Array.isArray(newRow.segnalazioni)
+          ) {
+            setPortineriaArrivalMap((prev) => {
+              const next = new Map(prev);
+              for (const item of newRow.segnalazioni!) {
+                if (item && item.id) {
+                  next.set(item.id, item);
+                }
+              }
+              return next;
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      portineriaSupabase.removeChannel(channel);
+    };
+  }, [displayDays, appointments]);
+
   const handlePinSuccess = () => {
     sessionStorage.setItem('agenda_admin_unlocked', 'true');
     setIsAdminUnlocked(true);
@@ -396,12 +464,17 @@ export default function App() {
     }
     const appToSave: Appointment = { ...app, order_index };
 
+    const oldApp = appointments.find((a) => a.id === appToSave.id);
+    let nextAppointments: Appointment[] = [];
+
     setAppointments((prev) => {
       const exists = prev.some((a) => a.id === appToSave.id);
       if (exists) {
-        return prev.map((a) => (a.id === appToSave.id ? appToSave : a));
+        nextAppointments = prev.map((a) => (a.id === appToSave.id ? appToSave : a));
+      } else {
+        nextAppointments = [...prev, appToSave];
       }
-      return [...prev, appToSave];
+      return nextAppointments;
     });
     setLastUpdateDate(new Date());
 
@@ -418,6 +491,14 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Errore sincronizzazione Supabase:', err);
+      }
+    }
+
+    // Sincronizzazione automatica bidirezionale con Supabase Portineria
+    if (appToSave.for_gatehouse || oldApp?.for_gatehouse) {
+      syncDateToPortineria(appToSave.date, nextAppointments);
+      if (oldApp && oldApp.date !== appToSave.date && oldApp.for_gatehouse) {
+        syncDateToPortineria(oldApp.date, nextAppointments);
       }
     }
   };
@@ -455,6 +536,7 @@ export default function App() {
     const target = appointments.find((a) => a.id === targetAppId);
     if (!dragged || !target) return;
 
+    const oldDate = dragged.date;
     const dayApps = appointments
       .filter((a) => a.date === targetDate && a.id !== draggedAppId)
       .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
@@ -465,9 +547,11 @@ export default function App() {
 
     const reordered = dayApps.map((a, i) => ({ ...a, order_index: (i + 1) * 10 }));
 
+    let allNextAppointments: Appointment[] = [];
     setAppointments((prev) => {
       const others = prev.filter((a) => a.date !== targetDate && a.id !== draggedAppId);
-      return [...others, ...reordered];
+      allNextAppointments = [...others, ...reordered];
+      return allNextAppointments;
     });
     setLastUpdateDate(new Date());
 
@@ -480,6 +564,14 @@ export default function App() {
         }
       }
     }
+
+    if (dragged.for_gatehouse) {
+      syncDateToPortineria(targetDate, allNextAppointments);
+      if (oldDate !== targetDate) {
+        syncDateToPortineria(oldDate, allNextAppointments);
+      }
+    }
+
     setDraggedAppId(null);
   };
 
@@ -501,11 +593,23 @@ export default function App() {
   };
 
   const handleDeleteAppointment = async (id: string) => {
-    setAppointments((prev) => prev.filter((a) => a.id !== id));
+    const target = appointments.find((a) => a.id === id);
+    const remaining = appointments.filter((a) => a.id !== id);
+
+    setAppointments(remaining);
     setLastUpdateDate(new Date());
 
     if (isSupabaseConfigured && supabase) {
       await supabase.from('appointments').delete().eq('id', id);
+    }
+
+    if (target?.for_gatehouse) {
+      syncDateToPortineria(target.date, remaining);
+      setPortineriaArrivalMap((prev) => {
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -1579,10 +1683,33 @@ export default function App() {
                                 </span>
                               )}
                               {app.gatehouse_only && (
-                                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shrink-0">
+                                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
                                   <ShieldCheck size={9} className="text-emerald-700" /> Solo Portineria
                                 </span>
                               )}
+                              {app.for_gatehouse && (() => {
+                                const arrival = portineriaArrivalMap.get(app.id);
+                                if (arrival?.arrivato) {
+                                  return (
+                                    <span 
+                                      className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap"
+                                      title={arrival.operatoreArrivo ? `Registrato da ${arrival.operatoreArrivo}` : 'Arrivato al varco'}
+                                    >
+                                      <CheckCircle2 size={10} className="text-emerald-700 shrink-0" />
+                                      <span>Arrivato ore {arrival.oraArrivo || '--:--'}{arrival.scalaArrivo ? ` · ${arrival.scalaArrivo}` : ''}</span>
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span 
+                                    className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1 shrink-0 whitespace-nowrap"
+                                    title="Inviato alla portineria · In attesa di arrivo"
+                                  >
+                                    <ShieldCheck size={10} className="text-amber-600 shrink-0" />
+                                    <span>In attesa in portineria</span>
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </div>
                         ) : (
@@ -1669,10 +1796,38 @@ export default function App() {
 
                               {/* Badge Solo Portineria */}
                               {app.gatehouse_only && (
-                                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shrink-0 print:hidden" title="Visibile esclusivamente nel foglio portineria">
+                                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shrink-0 print:hidden whitespace-nowrap" title="Visibile esclusivamente nel foglio portineria">
                                   <ShieldCheck size={12} className="text-emerald-700" /> Solo Portineria
                                 </span>
                               )}
+
+                              {/* Badge Stato Arrivo Portineria (se spuntato Invia a Portineria) */}
+                              {app.for_gatehouse && (() => {
+                                const arrival = portineriaArrivalMap.get(app.id);
+                                if (arrival?.arrivato) {
+                                  return (
+                                    <span 
+                                      className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1.5 shrink-0 print:hidden whitespace-nowrap shadow-xs"
+                                      title={arrival.operatoreArrivo ? `Registrato da ${arrival.operatoreArrivo} (${arrival.scalaArrivo || 'Varco'})` : 'Arrivo smarcato al varco di portineria'}
+                                    >
+                                      <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                                      <span>
+                                        Arrivato ore {arrival.oraArrivo || '--:--'}
+                                        {arrival.scalaArrivo ? ` · ${arrival.scalaArrivo}` : ''}
+                                      </span>
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span 
+                                    className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1.5 shrink-0 print:hidden whitespace-nowrap"
+                                    title="Inviato alla portineria · In attesa dello smarcamento del custode"
+                                  >
+                                    <ShieldCheck size={13} className="text-amber-600 shrink-0" />
+                                    <span>In attesa in portineria</span>
+                                  </span>
+                                );
+                              })()}
 
                               {/* Riferimento tra parentesi */}
                               {app.side_note && (
@@ -1806,6 +1961,7 @@ export default function App() {
         defaultDate={modalDefaultDate}
         contacts={contacts}
         onQuickSaveContact={handleSaveContact}
+        arrivalStatus={editingAppointment ? portineriaArrivalMap.get(editingAppointment.id) : null}
       />
 
       <DailyNoteModal
@@ -1844,6 +2000,7 @@ export default function App() {
         onToggleGatehouse={handleToggleGatehouse}
         onQuickAddAccess={handleQuickAddGatehouse}
         onDeleteAppointment={handleDeleteAppointment}
+        portineriaArrivalMap={portineriaArrivalMap}
       />
 
           <PinModal
