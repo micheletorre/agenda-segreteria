@@ -165,6 +165,7 @@ export default function App() {
   const [onlyDaysWithContent, setOnlyDaysWithContent] = useState<boolean>(true); // Nasconde giorni vuoti
   const [showConcluded, setShowConcluded] = useState<boolean>(false); // Mostra archivio conclusi
   const [showGatehouseOnly, setShowGatehouseOnly] = useState<boolean>(false); // Mostra voci solo portineria
+  const [showMobilePastDays, setShowMobilePastDays] = useState<boolean>(false); // Mostra giorni precedenti su mobile
 
   // Custodi in servizio in portineria per la data consultata (sincronizzati in tempo reale dal database Cloud di Turni Portineria)
   const activeGateShifts = usePortineriaShifts(startDateStr);
@@ -318,29 +319,45 @@ export default function App() {
   const canEdit = !isMobileMode || isAdminUnlocked;
 
   // Giorni effettivamente visualizzati:
-  // - Su Mobile: agenda perpetua scrollabile da OGGI fino a fine agenda, solo giorni impegnati
+  // - Su Mobile: agenda perpetua scrollabile da OGGI fino a fine agenda (o inclusi giorni precedenti se attivato)
   // - Su Desktop: intervallo selezionato nel selettore date
   const displayDays = useMemo(() => {
     if (isMobileMode) {
-      const todayIso = toISODate(new Date());
-      let maxDate = todayIso;
+      const currTodayIso = toISODate(new Date());
+      let minDate = currTodayIso;
+      let maxDate = currTodayIso;
+
+      if (showMobilePastDays) {
+        for (const a of appointments) {
+          if ((showConcluded || !a.is_concluded) && (!a.gatehouse_only || showGatehouseOnly) && a.date < minDate) {
+            minDate = a.date;
+          }
+        }
+        for (const n of dailyNotes) {
+          if (n.start_date < minDate) minDate = n.start_date;
+        }
+      }
+
       for (const a of appointments) {
-        if (!a.is_concluded && (!a.gatehouse_only || showGatehouseOnly) && a.date > maxDate) maxDate = a.date;
+        if ((showConcluded || !a.is_concluded) && (!a.gatehouse_only || showGatehouseOnly) && a.date > maxDate) {
+          maxDate = a.date;
+        }
       }
       for (const n of dailyNotes) {
         if (n.end_date > maxDate) maxDate = n.end_date;
       }
-      const allFutureDays = getDaysBetween(todayIso, maxDate);
-      const busyDays = allFutureDays.filter((isoDay) => {
+
+      const allSpanDays = getDaysBetween(minDate, maxDate);
+      const busyDays = allSpanDays.filter((isoDay) => {
         const hasApps = appointments.some(
           (a) => a.date === isoDay && (showConcluded || !a.is_concluded) && (!a.gatehouse_only || showGatehouseOnly)
         );
         const hasNotes = dailyNotes.some(
           (n) => isoDay >= n.start_date && isoDay <= n.end_date
         );
-        return hasApps || hasNotes;
+        return hasApps || hasNotes || (showMobilePastDays && isoDay === currTodayIso);
       });
-      return busyDays.length > 0 ? busyDays : [todayIso];
+      return busyDays.length > 0 ? busyDays : [currTodayIso];
     }
 
     if (!onlyDaysWithContent) return visibleDays;
@@ -354,7 +371,18 @@ export default function App() {
       return hasApps || hasNotes;
     });
     return filtered.length > 0 ? filtered : visibleDays.slice(0, 1);
-  }, [isMobileMode, visibleDays, appointments, dailyNotes, onlyDaysWithContent, showConcluded, showGatehouseOnly]);
+  }, [isMobileMode, showMobilePastDays, visibleDays, appointments, dailyNotes, onlyDaysWithContent, showConcluded, showGatehouseOnly]);
+
+  const pastBusyDaysCount = useMemo(() => {
+    const currTodayIso = toISODate(new Date());
+    const pastDates = new Set<string>();
+    for (const a of appointments) {
+      if (a.date < currTodayIso && (showConcluded || !a.is_concluded) && (!a.gatehouse_only || showGatehouseOnly)) {
+        pastDates.add(a.date);
+      }
+    }
+    return pastDates.size;
+  }, [appointments, showConcluded, showGatehouseOnly]);
 
   const concludedCount = useMemo(() => {
     return appointments.filter((a) => a.is_concluded).length;
@@ -1461,6 +1489,54 @@ export default function App() {
             </h2>
           </div>
 
+          {/* SU MOBILE (Sia Sola Lettura che Sbloccata): Controllo rapido Giorni Precedenti */}
+          {isMobileMode && (
+            <div className="no-print mb-3 flex items-center justify-between gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setShowMobilePastDays((v) => !v)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition cursor-pointer whitespace-nowrap ${
+                  showMobilePastDays
+                    ? 'bg-slate-900 text-amber-300 border-slate-800 shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                }`}
+              >
+                <ChevronLeft size={14} className={showMobilePastDays ? 'rotate-90 transition-transform' : ''} />
+                <span>
+                  {showMobilePastDays
+                    ? 'Nascondi giorni precedenti'
+                    : `Giorni precedenti${pastBusyDaysCount > 0 ? ` (${pastBusyDaysCount})` : ''}`}
+                </span>
+              </button>
+
+              {showMobilePastDays && (
+                <div className="flex items-center gap-1.5">
+                  {concludedCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowConcluded((v) => !v)}
+                      className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 border transition cursor-pointer whitespace-nowrap ${
+                        showConcluded
+                          ? 'bg-amber-100 text-amber-900 border-amber-300'
+                          : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Archive size={12} />
+                      <span>Conclusi ({concludedCount})</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => scrollToDay(todayIso)}
+                    className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition cursor-pointer whitespace-nowrap shadow-xs"
+                  >
+                    Vai a Oggi
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* LISTA GIORNI E APPUNTAMENTI (CON FILTRO GIORNI VUOTI E DRAG & DROP) */}
           <div className="space-y-3.5 print:space-y-2">
             {displayDays.map((isoDay, index) => {
@@ -1520,21 +1596,31 @@ export default function App() {
                 >
                   {/* INTESTAZIONE GIORNO CON TESTI GRANDI E BEN LEGGIBILI (FONT MONTSERRAT) */}
                   <div className="flex items-center justify-between pb-1">
-                    <div className="flex items-baseline gap-3 sm:gap-6">
+                    <div className="flex items-baseline gap-3 sm:gap-6 min-w-0">
                       <span
-                        className={`text-base sm:text-xl font-bold tracking-tight min-w-[100px] sm:min-w-[130px] ${
+                        className={`text-base sm:text-xl font-bold tracking-tight min-w-[100px] sm:min-w-[130px] whitespace-nowrap ${
                           isWeekend ? 'text-rose-800 print-weekend' : 'text-slate-950'
                         }`}
                       >
                         {dayName}
                       </span>
                       <span
-                        className={`text-base sm:text-xl font-bold tracking-tight ${
+                        className={`text-base sm:text-xl font-bold tracking-tight whitespace-nowrap ${
                           isWeekend ? 'text-rose-800 print-weekend' : 'text-slate-950'
                         }`}
                       >
                         {dateStr}
                       </span>
+                      {isMobileMode && showMobilePastDays && isoDay === todayIso && (
+                        <span className="no-print px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 whitespace-nowrap shrink-0">
+                          Oggi
+                        </span>
+                      )}
+                      {isMobileMode && showMobilePastDays && isoDay < todayIso && (
+                        <span className="no-print px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-200 text-slate-600 whitespace-nowrap shrink-0">
+                          Passato
+                        </span>
+                      )}
                     </div>
 
                     {/* Bottone rapido aggiunta su giorno */}
