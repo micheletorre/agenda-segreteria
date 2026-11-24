@@ -135,7 +135,7 @@ export const AppointmentModal: React.FC<Props> = ({
   };
 
   const QUICK_TIMES = ['h 09.00', 'h 10.00', 'h 11.45', 'h 15.00', 'in mattinata', 'a seguire', 'pomeriggio'];
-  const QUICK_REFERENTS = ['Monte Citorio', 'Via Giulia', 'Risorgimento', ''];
+  const QUICK_REFERENTS = ['Monte Citorio', 'Edilizia Veggis', 'Via Giulia', 'Risorgimento', ''];
   const QUICK_LOCATIONS = [
     'Banca Passadore',
     'BPM',
@@ -279,13 +279,13 @@ export const AppointmentModal: React.FC<Props> = ({
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-base"
             />
             {/* Scorciatoie Referente */}
-            <div className="flex gap-1.5 mt-2">
+            <div className="flex flex-wrap gap-1.5 mt-2">
               {QUICK_REFERENTS.map((qr) => (
                 <button
                   key={qr || 'nessuno'}
                   type="button"
                   onClick={() => setReferent(qr)}
-                  className={`text-xs px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition cursor-pointer whitespace-nowrap ${
                     referent === qr
                       ? 'bg-blue-600 text-white border-blue-600 font-semibold'
                       : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
