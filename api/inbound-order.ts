@@ -55,7 +55,8 @@ function detectCompanyFromEmail(
 }
 
 function heuristicParseEmail(subject: string, body: string): ParsedOrderResult {
-  const text = `${subject}\n${body}`.toLowerCase();
+  const fullRaw = `${subject}\n${body}`;
+  const text = fullRaw.toLowerCase();
 
   let supplier = 'Altro';
   if (text.includes('amazon')) supplier = 'Amazon';
@@ -66,8 +67,21 @@ function heuristicParseEmail(subject: string, body: string): ParsedOrderResult {
   else if (text.includes('gls')) supplier = 'GLS';
   else if (text.includes('dhl')) supplier = 'DHL';
 
-  const orderMatch = `${subject} ${body}`.match(/(?:#|ordine\s*(?:n\.?|nr\.?)?:?\s*)([A-Z0-9]{3}-\d{7}-\d{7}|[A-Z0-9-]{6,22})/i);
-  const orderNumber = orderMatch ? orderMatch[1] : undefined;
+  // Numero ordine: formato Amazon 123-1234567-1234567 oppure #codice con almeno una cifra
+  const amazonOrderMatch = fullRaw.match(/\b(\d{3}-\d{7}-\d{7})\b/);
+  const genericOrderMatch = fullRaw.match(/(?:#|(?:ordine|order)\s*(?:n\.?|nr\.?|num\.?|#)\s*:?\s*)([A-Z0-9-]{5,24})/i);
+  let orderNumber = amazonOrderMatch ? amazonOrderMatch[1] : genericOrderMatch ? genericOrderMatch[1] : undefined;
+  if (orderNumber && !/\d/.test(orderNumber)) orderNumber = undefined;
+
+  // Tracking: esplicito "Tracking: ...", "Lettera di vettura: ...", oppure codici corriere IT... / BRT... / GLS...
+  const explicitTrackingMatch = fullRaw.match(/(?:tracking(?:\s*(?:id|number|codice))?|lettera\s+di\s+vettura|codice\s+spedizione|ldv)\s*:?\s*#?\s*([A-Z0-9-]{6,32})/i);
+  const carrierTrackingMatch = fullRaw.match(/\b(IT\d{8,}[A-Z0-9]*|BRT[A-Z0-9]{6,}|GLS[A-Z0-9]{6,})\b/i);
+  let trackingNumber = explicitTrackingMatch
+    ? explicitTrackingMatch[1]
+    : carrierTrackingMatch
+    ? carrierTrackingMatch[1]
+    : undefined;
+  if (trackingNumber && !/\d/.test(trackingNumber)) trackingNumber = undefined;
 
   let status: ParsedOrderResult['status'] = 'ORDINATO';
   if (text.includes('consegnato')) status = 'ARRIVATO_PORTINERIA';
@@ -82,17 +96,54 @@ function heuristicParseEmail(subject: string, body: string): ParsedOrderResult {
     suggestedDepartment = 'Amministrazione';
   } else if (text.includes('detergente') || text.includes('panni') || text.includes('candeggina') || text.includes('sapone')) {
     suggestedDepartment = 'Pulizie';
-  } else if (text.includes('trapano') || text.includes('viti') || text.includes('silicone') || text.includes('lampadin')) {
+  } else if (text.includes('trapano') || text.includes('viti') || text.includes('silicone') || text.includes('lampadin') || text.includes('presa')) {
     suggestedDepartment = 'Manutenzione / Veggis';
   }
 
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const expectedDate = status === 'IN_CONSEGNA_OGGI' ? todayIso : undefined;
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+  let expectedDate: string | undefined = status === 'IN_CONSEGNA_OGGI' ? todayIso : undefined;
+  if (!expectedDate && text.includes('domani')) {
+    const tom = new Date(now);
+    tom.setDate(tom.getDate() + 1);
+    expectedDate = tom.toISOString().slice(0, 10);
+  }
+
+  // Estrae gli articoli dal corpo pulendo tracking, header di inoltro e firme
+  const cleanBodyLines = body
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => {
+      if (!l) return false;
+      const low = l.toLowerCase();
+      if (low.startsWith('---------- forwarded') || low.startsWith('da:') || low.startsWith('from:')) return false;
+      if (low.startsWith('date:') || low.startsWith('subject:') || low.startsWith('oggetto:') || low.startsWith('to:') || low.startsWith('a:')) return false;
+      if (low.startsWith('inviato da') || low.startsWith('sent from') || low.startsWith('--')) return false;
+      return true;
+    })
+    .map((l) =>
+      l
+        .replace(/(?:tracking(?:\s*(?:id|number|codice))?|lettera\s+di\s+vettura)\s*:?\s*#?\s*[A-Z0-9-]{6,32}/gi, '')
+        .replace(/in consegna oggi\s*:?/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^[.,:;-]+|[.,:;-]+$/g, '')
+        .trim()
+    )
+    .filter(Boolean);
+
+  const cleanSubject = subject.replace(/^(fwd:|i:|re:)\s*/gi, '').trim();
+  const itemsSummary =
+    cleanBodyLines.slice(0, 4).join(' · ').slice(0, 260) ||
+    cleanSubject.slice(0, 180) ||
+    'Articoli da email ordine';
 
   return {
     supplier,
     orderNumber,
-    itemsSummary: subject.replace(/^(fwd:|i:|re:)\s*/gi, '').trim().slice(0, 180) || 'Articoli da email ordine',
+    trackingNumber,
+    itemsSummary,
     expectedDate,
     status,
     suggestedDepartment,
