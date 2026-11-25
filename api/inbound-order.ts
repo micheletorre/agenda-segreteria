@@ -160,48 +160,52 @@ async function parseWithGemini(subject: string, body: string): Promise<ParsedOrd
 - supplier: nome fornitore (es. "Amazon", "Maury's", "Buffetti", "Leroy Merlin", "BRT", ecc.)
 - orderNumber: numero ordine se presente (stringa o null)
 - trackingNumber: codice tracking se presente (stringa o null)
-- itemsSummary: elenco sintetico e chiaro degli articoli ordinati (es. "2x Toner HP, 3x Risme A4"). Non scrivere testi generici se gli articoli sono nel testo.
+- itemsSummary: elenco completo, sintetico e chiaro di TUTTI gli articoli ordinati con il nome intero del prodotto (non usare la riga di anteprima troncata con "..." se il nome completo è nel corpo dell'email).
 - expectedDate: data prevista consegna in formato YYYY-MM-DD (oggi è ${todayIso}; se dice "oggi" usa ${todayIso}; se non indicata usa null)
 - status: uno tra "ORDINATO", "IN_TRANSITO", "IN_CONSEGNA_OGGI", "ARRIVATO_PORTINERIA"
 - suggestedDepartment: proponi solo se molto chiaro uno tra "Amministrazione", "Direzione / AU", "Manutenzione / Veggis", "Pulizie", "Portineria", altrimenti null
 
 Oggetto: ${subject}
 Testo email (estratto):
-${body.slice(0, 4500)}`;
+${body.slice(0, 9000)}`;
 
-  try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.1,
-          },
-        }),
-      }
-    );
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  for (const model of models) {
+    try {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.1,
+            },
+          }),
+        }
+      );
 
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) return null;
-    const parsed = JSON.parse(rawText);
-    return {
-      supplier: parsed.supplier || 'Altro',
-      orderNumber: parsed.orderNumber || undefined,
-      trackingNumber: parsed.trackingNumber || undefined,
-      itemsSummary: parsed.itemsSummary || subject,
-      expectedDate: parsed.expectedDate || undefined,
-      status: parsed.status || 'ORDINATO',
-      suggestedDepartment: parsed.suggestedDepartment || undefined,
-    };
-  } catch {
-    return null;
+      if (!resp.ok) continue;
+      const json = await resp.json();
+      const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) continue;
+      const parsed = JSON.parse(rawText);
+      return {
+        supplier: parsed.supplier || 'Altro',
+        orderNumber: parsed.orderNumber || undefined,
+        trackingNumber: parsed.trackingNumber || undefined,
+        itemsSummary: parsed.itemsSummary || subject,
+        expectedDate: parsed.expectedDate || undefined,
+        status: parsed.status || 'ORDINATO',
+        suggestedDepartment: parsed.suggestedDepartment || undefined,
+      };
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 export default async function handler(req: any, res: any) {
@@ -233,9 +237,18 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ ok: true, ignored: true, reason: 'System/Google notification email' });
   }
 
-  const company = detectCompanyFromEmail(to, subject, body, labels);
-  const aiParsed = await parseWithGemini(subject, body);
-  const parsed = aiParsed || heuristicParseEmail(subject, body);
+  const stripInvisible = (s: string) =>
+    String(s || '')
+      .replace(/[\u034f\u200b-\u200f\u00ad\ufeff\u2060\u180e]/g, '')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
+
+  const cleanSubject = stripInvisible(subject);
+  const cleanBody = stripInvisible(body);
+
+  const company = detectCompanyFromEmail(to, cleanSubject, cleanBody, labels);
+  const aiParsed = await parseWithGemini(cleanSubject, cleanBody);
+  const parsed = aiParsed || heuristicParseEmail(cleanSubject, cleanBody);
 
   const supabase = createClient(PORTINERIA_SUPABASE_URL, PORTINERIA_SUPABASE_KEY);
 
