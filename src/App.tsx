@@ -28,7 +28,8 @@ import {
   Unlock,
   ExternalLink,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Package
 } from 'lucide-react';
 import type { Appointment, DailyNote, Contact } from './types';
 import { INITIAL_APPOINTMENTS, INITIAL_DAILY_NOTES, INITIAL_CONTACTS } from './initialData';
@@ -49,6 +50,7 @@ import { ShareModal } from './components/ShareModal';
 import { GatehouseModal } from './components/GatehouseModal';
 import { PinModal } from './components/PinModal';
 import { ProjectManualView } from './components/ProjectManualView';
+import { IncomingOrdersModal } from './components/IncomingOrdersModal';
 import { InSedeIcon, UscitaIcon } from './components/CategoryIcons';
 import { usePortineriaShifts, getPortineriaUrlForDate, isShiftActiveNow } from './utils/portineriaShifts';
 import {
@@ -59,6 +61,13 @@ import {
   CLOUD_KEY_APPUNTAMENTI_PREFIX,
   type PortineriaAppointmentItem,
 } from './utils/portineriaSync';
+import {
+  ensureDemoOrdersSeeded,
+  fetchIncomingOrders,
+  saveIncomingOrders,
+  CLOUD_KEY_ORDINI_IN_ARRIVO,
+  type IncomingOrder,
+} from './utils/incomingOrdersSync';
 
 // Nome applicazione configurabile (pronto per essere personalizzato su indicazione della segreteria)
 export const APP_NAME = 'AGENDA SEGRETERIA';
@@ -187,6 +196,8 @@ export default function App() {
   const [isContactsModalOpen, setIsContactsModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isGatehouseModalOpen, setIsGatehouseModalOpen] = useState(false);
+  const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
+  const [incomingOrders, setIncomingOrders] = useState<IncomingOrder[]>([]);
   const [isManualViewOpen, setIsManualViewOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const s = window.location.search || '';
@@ -441,6 +452,8 @@ export default function App() {
               }
               return next;
             });
+          } else if (newRow && newRow.data_str === CLOUD_KEY_ORDINI_IN_ARRIVO && Array.isArray(newRow.segnalazioni)) {
+            setIncomingOrders(newRow.segnalazioni as unknown as IncomingOrder[]);
           }
         }
       )
@@ -451,6 +464,23 @@ export default function App() {
       portineriaSupabase.removeChannel(channel);
     };
   }, [displayDays, appointments]);
+
+  // Caricamento iniziale ordini in arrivo (con seed demo se ancora vuoto)
+  useEffect(() => {
+    ensureDemoOrdersSeeded().then((list) => {
+      setIncomingOrders(list);
+    });
+  }, []);
+
+  const handleSaveIncomingOrders = async (nextOrders: IncomingOrder[]) => {
+    setIncomingOrders(nextOrders);
+    await saveIncomingOrders(nextOrders);
+  };
+
+  const handleRefreshIncomingOrders = async () => {
+    const list = await fetchIncomingOrders();
+    setIncomingOrders(list);
+  };
 
   // Sincronizzazione automatica su Portineria di tutti gli appuntamenti da oggi in poi già spuntati
   useEffect(() => {
@@ -975,6 +1005,20 @@ export default function App() {
           {isMobileMode && (
             <div className="flex items-center gap-2 flex-wrap">
               <button
+                onClick={() => setIsOrdersModalOpen(true)}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 text-amber-200 bg-slate-800 hover:bg-slate-700 border border-amber-500/40 shadow-xs transition cursor-pointer whitespace-nowrap"
+                title="Ordini e pacchi in arrivo a Palazzo"
+              >
+                <Package size={13} className="text-amber-400 shrink-0" />
+                <span>Ordini</span>
+                {incomingOrders.filter((o) => o.status !== 'CONSEGNATO').length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-slate-950">
+                    {incomingOrders.filter((o) => o.status !== 'CONSEGNATO').length}
+                  </span>
+                )}
+              </button>
+
+              <button
                 onClick={() => setIsManualViewOpen(true)}
                 className="px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 shadow-xs transition cursor-pointer"
                 title="Dossier Funzionale per la Proprietà"
@@ -1047,10 +1091,24 @@ export default function App() {
 
               <button
                 onClick={() => setIsGatehouseModalOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer whitespace-nowrap"
                 title="Apri e stampa Foglio Portineria A4 per gli accessi del giorno"
               >
                 <ShieldCheck size={14} /> Foglio Portineria
+              </button>
+
+              <button
+                onClick={() => setIsOrdersModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-200 border border-amber-500/40 font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer whitespace-nowrap"
+                title="Dashboard In Arrivo a Palazzo · Ordini & Pacchi Aziendali"
+              >
+                <Package size={14} className="text-amber-400 shrink-0" />
+                <span>Ordini &amp; Arrivi</span>
+                {incomingOrders.filter((o) => o.status !== 'CONSEGNATO').length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-slate-950">
+                    {incomingOrders.filter((o) => o.status !== 'CONSEGNATO').length}
+                  </span>
+                )}
               </button>
 
               <a
@@ -2128,6 +2186,14 @@ export default function App() {
         onQuickAddAccess={handleQuickAddGatehouse}
         onDeleteAppointment={handleDeleteAppointment}
         portineriaArrivalMap={portineriaArrivalMap}
+      />
+
+      <IncomingOrdersModal
+        isOpen={isOrdersModalOpen}
+        onClose={() => setIsOrdersModalOpen(false)}
+        orders={incomingOrders}
+        onSaveOrders={handleSaveIncomingOrders}
+        onRefreshOrders={handleRefreshIncomingOrders}
       />
 
           <PinModal
