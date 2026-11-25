@@ -109,17 +109,18 @@ function heuristicParseEmail(subject: string, body: string): ParsedOrderResult {
     expectedDate = tom.toISOString().slice(0, 10);
   }
 
-  // Estrae gli articoli dal corpo pulendo tracking, header di inoltro e firme
+  // Estrae gli articoli dal corpo pulendo URL, tracking, header di inoltro e firme
   const cleanBodyLines = body
     .replace(/\r/g, '')
     .split('\n')
-    .map((l) => l.trim())
+    .map((l) => l.replace(/^[>\s*•]+/, '').replace(/https?:\/\/\S+/gi, '').trim())
     .filter((l) => {
-      if (!l) return false;
+      if (!l || l.length < 3) return false;
       const low = l.toLowerCase();
       if (low.startsWith('---------- forwarded') || low.startsWith('da:') || low.startsWith('from:')) return false;
       if (low.startsWith('date:') || low.startsWith('subject:') || low.startsWith('oggetto:') || low.startsWith('to:') || low.startsWith('a:')) return false;
       if (low.startsWith('inviato da') || low.startsWith('sent from') || low.startsWith('--')) return false;
+      if (low.startsWith('visualizza') || low.startsWith('segui il tuo pacco') || low.startsWith('hai bisogno di aiuto')) return false;
       return true;
     })
     .map((l) =>
@@ -131,11 +132,11 @@ function heuristicParseEmail(subject: string, body: string): ParsedOrderResult {
         .replace(/^[.,:;-]+|[.,:;-]+$/g, '')
         .trim()
     )
-    .filter(Boolean);
+    .filter((l) => l.length >= 3);
 
   const cleanSubject = subject.replace(/^(fwd:|i:|re:)\s*/gi, '').trim();
   const itemsSummary =
-    cleanBodyLines.slice(0, 4).join(' · ').slice(0, 260) ||
+    cleanBodyLines.slice(0, 4).join(' · ').slice(0, 320) ||
     cleanSubject.slice(0, 180) ||
     'Articoli da email ordine';
 
@@ -217,6 +218,19 @@ export default async function handler(req: any, res: any) {
   const { to = '', from = '', subject = '', body = '', labels = [] } = req.body || {};
   if (!subject && !body) {
     return res.status(400).json({ error: 'Missing email subject/body' });
+  }
+
+  // Ignora email di sistema Google (avvisi di sicurezza, conferme inoltro Gmail, ecc.)
+  const sysCheck = `${from} ${subject}`.toLowerCase();
+  if (
+    sysCheck.includes('accounts.google.com') ||
+    sysCheck.includes('forwarding-noreply@google.com') ||
+    sysCheck.includes('avviso di sicurezza') ||
+    sysCheck.includes('security alert') ||
+    sysCheck.includes('conferma inoltro gmail') ||
+    sysCheck.includes('gmail forwarding confirmation')
+  ) {
+    return res.status(200).json({ ok: true, ignored: true, reason: 'System/Google notification email' });
   }
 
   const company = detectCompanyFromEmail(to, subject, body, labels);
