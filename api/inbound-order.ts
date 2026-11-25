@@ -109,11 +109,17 @@ function heuristicParseEmail(subject: string, body: string): ParsedOrderResult {
     expectedDate = tom.toISOString().slice(0, 10);
   }
 
-  // Estrae gli articoli dal corpo pulendo URL, tracking, header di inoltro e firme
+  // Estrae gli articoli dal corpo pulendo URL, [image:...], tracking, header di inoltro e firme
   const cleanBodyLines = body
     .replace(/\r/g, '')
     .split('\n')
-    .map((l) => l.replace(/^[>\s*•]+/, '').replace(/https?:\/\/\S+/gi, '').trim())
+    .map((l) =>
+      l
+        .replace(/\[image:[^\]]*\]/gi, '')
+        .replace(/^[>\s*•]+/, '')
+        .replace(/https?:\/\/\S+/gi, '')
+        .trim()
+    )
     .filter((l) => {
       if (!l || l.length < 3) return false;
       const low = l.toLowerCase();
@@ -121,6 +127,7 @@ function heuristicParseEmail(subject: string, body: string): ParsedOrderResult {
       if (low.startsWith('date:') || low.startsWith('subject:') || low.startsWith('oggetto:') || low.startsWith('to:') || low.startsWith('a:')) return false;
       if (low.startsWith('inviato da') || low.startsWith('sent from') || low.startsWith('--')) return false;
       if (low.startsWith('visualizza') || low.startsWith('segui il tuo pacco') || low.startsWith('hai bisogno di aiuto')) return false;
+      if (low.startsWith('i tuoi ordini') || low.includes('offerte fantastiche') || low.includes('black friday')) return false;
       return true;
     })
     .map((l) =>
@@ -209,6 +216,32 @@ ${body.slice(0, 9000)}`;
 }
 
 export default async function handler(req: any, res: any) {
+  if (req.method === 'GET') {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      return res.status(200).json({ ok: true, hasGeminiKey: false });
+    }
+    try {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: 'Rispondi solo OK' }] }] }),
+        }
+      );
+      const data = await r.json().catch(() => null);
+      return res.status(200).json({
+        ok: true,
+        hasGeminiKey: true,
+        geminiStatus: r.status,
+        geminiError: r.ok ? null : data?.error?.message || 'Error',
+      });
+    } catch (e: any) {
+      return res.status(200).json({ ok: true, hasGeminiKey: true, geminiError: e?.message || 'Fetch error' });
+    }
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
