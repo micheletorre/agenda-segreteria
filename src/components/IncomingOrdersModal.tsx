@@ -52,11 +52,12 @@ function processIncomingOrderEmails() {
     doneLabel = GmailApp.createLabel(LABEL_DONE);
   }
 
-  // Cerca le email in arrivo non ancora contrassegnate come registrate
-  const threads = GmailApp.search('in:inbox -label:"' + LABEL_DONE + '"', 0, 15);
+  // Cerca le email in arrivo (o etichettate) non ancora contrassegnate come registrate
+  const threads = GmailApp.search('-label:"' + LABEL_DONE + '" (in:inbox OR label:"Edilizia Veggis Monte Citorio" OR label:"Plutarco")', 0, 15);
   for (const thread of threads) {
     const messages = thread.getMessages();
     const lastMsg = messages[messages.length - 1];
+    const threadLabels = thread.getLabels().map(function(l) { return l.getName(); });
 
     const payload = {
       to: lastMsg.getTo(),
@@ -64,6 +65,7 @@ function processIncomingOrderEmails() {
       subject: lastMsg.getSubject(),
       body: lastMsg.getPlainBody() || '',
       date: lastMsg.getDate().toISOString(),
+      labels: threadLabels,
     };
 
     try {

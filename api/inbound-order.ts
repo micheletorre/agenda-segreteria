@@ -15,13 +15,29 @@ interface ParsedOrderResult {
   suggestedDepartment?: string;
 }
 
-function detectCompanyFromEmail(toHeader: string = '', subject: string = '', body: string = ''): string {
-  const combined = `${toHeader} ${subject}`.toLowerCase();
-  if (combined.includes('+veggis') || combined.includes('edilizia veggis')) {
-    return 'Edilizia Veggis';
+function detectCompanyFromEmail(
+  toHeader: string = '',
+  subject: string = '',
+  body: string = '',
+  labels: string[] = []
+): string {
+  const labelsLower = (Array.isArray(labels) ? labels : []).map((l) => String(l).toLowerCase());
+  if (labelsLower.some((l) => l.includes('plutarco'))) {
+    return 'Plutarco';
   }
+  if (labelsLower.some((l) => l.includes('edilizia veggis monte citorio'))) {
+    return 'Edilizia Veggis Monte Citorio';
+  }
+
+  const combined = `${toHeader} ${subject}`.toLowerCase();
   if (combined.includes('+plutarco') || combined.includes('plutarco')) {
     return 'Plutarco';
+  }
+  if (combined.includes('+veggis') && combined.includes('montecitorio')) {
+    return 'Edilizia Veggis Monte Citorio';
+  }
+  if (combined.includes('+veggis') || combined.includes('edilizia veggis')) {
+    return 'Edilizia Veggis';
   }
   if (combined.includes('+montecitorio') || combined.includes('monte citorio')) {
     return 'Monte Citorio';
@@ -29,13 +45,13 @@ function detectCompanyFromEmail(toHeader: string = '', subject: string = '', bod
   if (combined.includes('+proprieta') || combined.includes('proprietà')) {
     return 'Proprietà';
   }
-  if (body.toLowerCase().includes('edilizia veggis')) {
-    return 'Edilizia Veggis';
-  }
   if (body.toLowerCase().includes('plutarco')) {
     return 'Plutarco';
   }
-  return 'Monte Citorio';
+  if (body.toLowerCase().includes('edilizia veggis')) {
+    return 'Edilizia Veggis Monte Citorio';
+  }
+  return 'Edilizia Veggis Monte Citorio';
 }
 
 function heuristicParseEmail(subject: string, body: string): ParsedOrderResult {
@@ -147,12 +163,12 @@ export default async function handler(req: any, res: any) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { to = '', from = '', subject = '', body = '' } = req.body || {};
+  const { to = '', from = '', subject = '', body = '', labels = [] } = req.body || {};
   if (!subject && !body) {
     return res.status(400).json({ error: 'Missing email subject/body' });
   }
 
-  const company = detectCompanyFromEmail(to, subject, body);
+  const company = detectCompanyFromEmail(to, subject, body, labels);
   const aiParsed = await parseWithGemini(subject, body);
   const parsed = aiParsed || heuristicParseEmail(subject, body);
 
