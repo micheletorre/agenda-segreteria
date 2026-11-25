@@ -20,6 +20,9 @@ function detectCompanyFromEmail(toHeader: string = '', subject: string = '', bod
   if (combined.includes('+veggis') || combined.includes('edilizia veggis')) {
     return 'Edilizia Veggis';
   }
+  if (combined.includes('+plutarco') || combined.includes('plutarco')) {
+    return 'Plutarco';
+  }
   if (combined.includes('+montecitorio') || combined.includes('monte citorio')) {
     return 'Monte Citorio';
   }
@@ -28,6 +31,9 @@ function detectCompanyFromEmail(toHeader: string = '', subject: string = '', bod
   }
   if (body.toLowerCase().includes('edilizia veggis')) {
     return 'Edilizia Veggis';
+  }
+  if (body.toLowerCase().includes('plutarco')) {
+    return 'Plutarco';
   }
   return 'Monte Citorio';
 }

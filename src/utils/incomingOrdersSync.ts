@@ -43,7 +43,7 @@ export interface DepartmentRule {
 export const CLOUD_KEY_ORDINI_IN_ARRIVO = '__ordini_in_arrivo__';
 export const CLOUD_KEY_REGOLE_REPARTI = '__regole_reparti_ordini__';
 
-export const QUICK_COMPANIES = ['Monte Citorio', 'Edilizia Veggis', 'Proprietà'] as const;
+export const QUICK_COMPANIES = ['Monte Citorio', 'Edilizia Veggis', 'Plutarco', 'Proprietà'] as const;
 
 export const QUICK_SUPPLIERS = ['Amazon', "Maury's", 'Buffetti', 'Leroy Merlin', 'Altro'] as const;
 

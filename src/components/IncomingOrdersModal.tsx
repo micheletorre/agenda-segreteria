@@ -357,6 +357,7 @@ export const IncomingOrdersModal: React.FC<Props> = ({
                   <ul className="font-mono text-[11px] text-blue-800 space-y-0.5 pt-1">
                     <li>• ordini.veggismontecitorio<strong>+montecitorio</strong>@gmail.com</li>
                     <li>• ordini.veggismontecitorio<strong>+veggis</strong>@gmail.com</li>
+                    <li>• ordini.veggismontecitorio<strong>+plutarco</strong>@gmail.com</li>
                     <li>• ordini.veggismontecitorio<strong>+proprieta</strong>@gmail.com</li>
                   </ul>
                 </div>
@@ -367,6 +368,7 @@ export const IncomingOrdersModal: React.FC<Props> = ({
                   <ul className="text-[11px] space-y-0.5 pt-1">
                     <li>• A: <code className="bg-slate-200 px-1 rounded">+veggis</code> → Etichetta <strong>Edilizia Veggis</strong></li>
                     <li>• A: <code className="bg-slate-200 px-1 rounded">+montecitorio</code> → Etichetta <strong>Monte Citorio</strong></li>
+                    <li>• A: <code className="bg-slate-200 px-1 rounded">+plutarco</code> → Etichetta <strong>Plutarco</strong></li>
                     <li>• Lo script aggiunge poi in automatico l&apos;etichetta verde <strong>Ordini/Registrato</strong> appena lo carica qui.</li>
                   </ul>
                 </div>
