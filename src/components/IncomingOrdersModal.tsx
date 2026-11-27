@@ -15,6 +15,7 @@ import {
   Building2,
   Calendar,
   Tag,
+  Pencil,
 } from 'lucide-react';
 import {
   type IncomingOrder,
@@ -103,6 +104,43 @@ export const IncomingOrdersModal: React.FC<Props> = ({
   const [ruleToast, setRuleToast] = useState<string | null>(null);
   const [customDeptForId, setCustomDeptForId] = useState<string | null>(null);
   const [customDeptText, setCustomDeptText] = useState('');
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [editItemsSummary, setEditItemsSummary] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editTrackingNumber, setEditTrackingNumber] = useState('');
+  const [editExpectedDate, setEditExpectedDate] = useState('');
+
+  const handleStartEditOrder = (order: IncomingOrder) => {
+    setEditingOrderId(order.id);
+    setEditItemsSummary(order.itemsSummary || '');
+    setEditNotes(order.notes || '');
+    setEditTrackingNumber(order.trackingNumber || '');
+    setEditExpectedDate(order.expectedDate || '');
+  };
+
+  const handleCancelEditOrder = () => {
+    setEditingOrderId(null);
+  };
+
+  const handleSaveEditOrder = (order: IncomingOrder) => {
+    const trimmedSummary = editItemsSummary.trim();
+    if (!trimmedSummary) return;
+    const now = new Date().toISOString();
+    const nextOrders = orders.map((o) =>
+      o.id === order.id
+        ? {
+            ...o,
+            itemsSummary: trimmedSummary,
+            notes: editNotes.trim() || undefined,
+            trackingNumber: editTrackingNumber.trim() || undefined,
+            expectedDate: editExpectedDate.trim() || undefined,
+            updatedAt: now,
+          }
+        : o
+    );
+    setEditingOrderId(null);
+    onSaveOrders(nextOrders);
+  };
 
   // Form nuovo ordine manuale
   const [newCompany, setNewCompany] = useState<string>('Monte Citorio');
@@ -642,6 +680,14 @@ export const IncomingOrdersModal: React.FC<Props> = ({
                       {renderStatusBadge(order)}
                       <button
                         type="button"
+                        onClick={() => handleStartEditOrder(order)}
+                        className="p-1 text-slate-400 hover:text-indigo-600 rounded-lg cursor-pointer"
+                        title="Modifica contenuto ordine"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleDeleteOrder(order.id)}
                         className="p-1 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
                         title="Elimina ordine"
@@ -652,16 +698,88 @@ export const IncomingOrdersModal: React.FC<Props> = ({
                   </div>
 
                   {/* Riga 2: Contenuto completo del pacco (MAI troncato) */}
-                  <div className="py-2">
-                    <div className="text-sm font-bold text-slate-900 leading-snug break-words">
-                      {order.itemsSummary}
-                    </div>
-                    {order.notes && (
-                      <div className="text-xs text-slate-500 mt-1 break-words">
-                        {order.notes}
+                  {editingOrderId === order.id ? (
+                    <div className="py-2 space-y-2 bg-slate-50/80 rounded-xl p-2.5 my-2 border border-slate-200">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                          Contenuto / Descrizione pacco
+                        </label>
+                        <textarea
+                          value={editItemsSummary}
+                          onChange={(e) => setEditItemsSummary(e.target.value)}
+                          rows={2}
+                          className="w-full px-2.5 py-1.5 text-sm font-semibold text-slate-900 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="Descrizione contenuto pacco..."
+                          autoFocus
+                        />
                       </div>
-                    )}
-                  </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                            Note (opzionale)
+                          </label>
+                          <input
+                            type="text"
+                            value={editNotes}
+                            onChange={(e) => setEditNotes(e.target.value)}
+                            className="w-full px-2.5 py-1 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Note aggiuntive..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                            Tracking (opzionale)
+                          </label>
+                          <input
+                            type="text"
+                            value={editTrackingNumber}
+                            onChange={(e) => setEditTrackingNumber(e.target.value)}
+                            className="w-full px-2.5 py-1 text-xs font-mono text-slate-800 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Codice tracking..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                            Data prevista
+                          </label>
+                          <input
+                            type="date"
+                            value={editExpectedDate}
+                            onChange={(e) => setEditExpectedDate(e.target.value)}
+                            className="w-full px-2.5 py-1 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleCancelEditOrder}
+                          className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold inline-flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                        >
+                          <X size={12} /> Annulla
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEditOrder(order)}
+                          disabled={!editItemsSummary.trim()}
+                          className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold inline-flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                        >
+                          <Check size={12} /> Salva modifiche
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-2">
+                      <div className="text-sm font-bold text-slate-900 leading-snug break-words">
+                        {order.itemsSummary}
+                      </div>
+                      {order.notes && (
+                        <div className="text-xs text-slate-500 mt-1 break-words">
+                          {order.notes}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Riga 3: Assegnazione Reparto a 1 clic + Azioni Consegna */}
                   <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
