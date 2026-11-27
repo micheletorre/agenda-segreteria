@@ -1845,45 +1845,49 @@ export default function App() {
                                   {app.side_note}
                                 </span>
                               )}
-                              {app.gatehouse_only && (
-                                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
-                                  <ShieldCheck size={9} className="text-emerald-700" /> Solo Portineria
-                                </span>
+                              {(app.gatehouse_only || app.for_gatehouse) && (
+                                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                  {app.gatehouse_only && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                      <ShieldCheck size={9} className="text-emerald-700" /> Solo Portineria
+                                    </span>
+                                  )}
+                                  {app.for_gatehouse && (() => {
+                                    const arrival = portineriaArrivalMap.get(app.id);
+                                    if (arrival?.arrivato) {
+                                      return (
+                                        <span 
+                                          className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap"
+                                          title={arrival.operatoreArrivo ? `Registrato da ${arrival.operatoreArrivo}` : 'Arrivato al varco'}
+                                        >
+                                          <CheckCircle2 size={10} className="text-emerald-700 shrink-0" />
+                                          <span>Arrivato ore {arrival.oraArrivo || '--:--'}{arrival.scalaArrivo ? ` · ${arrival.scalaArrivo}` : ''}</span>
+                                        </span>
+                                      );
+                                    }
+                                    if (arrival?.nonArrivato || isEndOfDayPassed(app.date)) {
+                                      return (
+                                        <span 
+                                          className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap"
+                                          title="Chiuso a fine giornata: ospite non arrivato"
+                                        >
+                                          <XCircle size={10} className="text-slate-500 shrink-0" />
+                                          <span>Non arrivato</span>
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <span 
+                                        className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1 shrink-0 whitespace-nowrap"
+                                        title="Inviato alla portineria · In attesa di arrivo"
+                                      >
+                                        <ShieldCheck size={10} className="text-amber-600 shrink-0" />
+                                        <span>In attesa in portineria</span>
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
                               )}
-                              {app.for_gatehouse && (() => {
-                                const arrival = portineriaArrivalMap.get(app.id);
-                                if (arrival?.arrivato) {
-                                  return (
-                                    <span 
-                                      className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap"
-                                      title={arrival.operatoreArrivo ? `Registrato da ${arrival.operatoreArrivo}` : 'Arrivato al varco'}
-                                    >
-                                      <CheckCircle2 size={10} className="text-emerald-700 shrink-0" />
-                                      <span>Arrivato ore {arrival.oraArrivo || '--:--'}{arrival.scalaArrivo ? ` · ${arrival.scalaArrivo}` : ''}</span>
-                                    </span>
-                                  );
-                                }
-                                if (arrival?.nonArrivato || isEndOfDayPassed(app.date)) {
-                                  return (
-                                    <span 
-                                      className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap"
-                                      title="Chiuso a fine giornata: ospite non arrivato"
-                                    >
-                                      <XCircle size={10} className="text-slate-500 shrink-0" />
-                                      <span>Non arrivato</span>
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <span 
-                                    className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1 shrink-0 whitespace-nowrap"
-                                    title="Inviato alla portineria · In attesa di arrivo"
-                                  >
-                                    <ShieldCheck size={10} className="text-amber-600 shrink-0" />
-                                    <span>In attesa in portineria</span>
-                                  </span>
-                                );
-                              })()}
                             </div>
                           </div>
                         ) : (
@@ -1938,22 +1942,72 @@ export default function App() {
                                 ) : ''}
                               </span>
 
-                              {/* Descrizione / Titolo con codifica cromatica */}
-                              <div className="min-w-0 flex-1 break-words">
-                                {app.category === 'internal_red' ? (
-                                  <span className="text-base sm:text-lg font-bold text-red-600 print-red inline-flex items-baseline gap-1.5 flex-wrap">
-                                    <InSedeIcon size={16} className="text-red-500 self-center shrink-0" />
-                                    <span>{app.title}</span>
-                                  </span>
-                                ) : app.category === 'external_yellow' ? (
-                                  <span className="text-base sm:text-lg font-bold bg-amber-200 text-amber-950 px-2 py-0.5 rounded-xs print-yellow inline-flex items-center gap-1.5 flex-wrap">
-                                    <UscitaIcon size={15} className="text-amber-950 self-center shrink-0" />
-                                    <span>{app.title}</span>
-                                  </span>
-                                ) : (
-                                  <span className="text-base sm:text-lg font-medium text-slate-900">
-                                    {app.title}
-                                  </span>
+                              {/* Descrizione / Titolo con codifica cromatica + Badge Portineria sotto */}
+                              <div className="min-w-0 flex-1">
+                                <div>
+                                  {app.category === 'internal_red' ? (
+                                    <span className="text-base sm:text-lg font-bold text-red-600 print-red inline-flex items-baseline gap-1.5">
+                                      <InSedeIcon size={16} className="text-red-500 self-center shrink-0" />
+                                      <span>{app.title}</span>
+                                    </span>
+                                  ) : app.category === 'external_yellow' ? (
+                                    <span className="text-base sm:text-lg font-bold bg-amber-200 text-amber-950 px-2 py-0.5 rounded-xs print-yellow inline-flex items-center gap-1.5">
+                                      <UscitaIcon size={15} className="text-amber-950 self-center shrink-0" />
+                                      <span>{app.title}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-base sm:text-lg font-medium text-slate-900">
+                                      {app.title}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Badge Portineria posizionati sotto il titolo per non alterare l'allineamento orizzontale */}
+                                {(app.gatehouse_only || app.for_gatehouse) && (
+                                  <div className="mt-1 flex items-center gap-1.5 flex-wrap print:hidden">
+                                    {app.gatehouse_only && (
+                                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap" title="Visibile esclusivamente nel foglio portineria">
+                                        <ShieldCheck size={11} className="text-emerald-700" /> Solo Portineria
+                                      </span>
+                                    )}
+                                    {app.for_gatehouse && (() => {
+                                      const arrival = portineriaArrivalMap.get(app.id);
+                                      if (arrival?.arrivato) {
+                                        return (
+                                          <span 
+                                            className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-xs"
+                                            title={arrival.operatoreArrivo ? `Registrato da ${arrival.operatoreArrivo} (${arrival.scalaArrivo || 'Varco'})` : 'Arrivo smarcato al varco di portineria'}
+                                          >
+                                            <CheckCircle2 size={12} className="text-emerald-600 shrink-0" />
+                                            <span>
+                                              Arrivato ore {arrival.oraArrivo || '--:--'}
+                                              {arrival.scalaArrivo ? ` · ${arrival.scalaArrivo}` : ''}
+                                            </span>
+                                          </span>
+                                        );
+                                      }
+                                      if (arrival?.nonArrivato || isEndOfDayPassed(app.date)) {
+                                        return (
+                                          <span 
+                                            className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap"
+                                            title="Chiuso automaticamente a fine giornata: ospite non arrivato"
+                                          >
+                                            <XCircle size={12} className="text-slate-500 shrink-0" />
+                                            <span>Non arrivato</span>
+                                          </span>
+                                        );
+                                      }
+                                      return (
+                                        <span 
+                                          className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap"
+                                          title="Inviato alla portineria · In attesa dello smarcamento del custode"
+                                        >
+                                          <ShieldCheck size={12} className="text-amber-600 shrink-0" />
+                                          <span>In attesa in portineria</span>
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1967,52 +2021,6 @@ export default function App() {
                                   {app.location}
                                 </span>
                               )}
-
-                              {/* Badge Solo Portineria */}
-                              {app.gatehouse_only && (
-                                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shrink-0 print:hidden whitespace-nowrap" title="Visibile esclusivamente nel foglio portineria">
-                                  <ShieldCheck size={12} className="text-emerald-700" /> Solo Portineria
-                                </span>
-                              )}
-
-                              {/* Badge Stato Arrivo Portineria (se spuntato Invia a Portineria) */}
-                              {app.for_gatehouse && (() => {
-                                const arrival = portineriaArrivalMap.get(app.id);
-                                if (arrival?.arrivato) {
-                                  return (
-                                    <span 
-                                      className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1.5 shrink-0 print:hidden whitespace-nowrap shadow-xs"
-                                      title={arrival.operatoreArrivo ? `Registrato da ${arrival.operatoreArrivo} (${arrival.scalaArrivo || 'Varco'})` : 'Arrivo smarcato al varco di portineria'}
-                                    >
-                                      <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
-                                      <span>
-                                        Arrivato ore {arrival.oraArrivo || '--:--'}
-                                        {arrival.scalaArrivo ? ` · ${arrival.scalaArrivo}` : ''}
-                                      </span>
-                                    </span>
-                                  );
-                                }
-                                if (arrival?.nonArrivato || isEndOfDayPassed(app.date)) {
-                                  return (
-                                    <span 
-                                      className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-1.5 shrink-0 print:hidden whitespace-nowrap"
-                                      title="Chiuso automaticamente a fine giornata: ospite non arrivato"
-                                    >
-                                      <XCircle size={13} className="text-slate-500 shrink-0" />
-                                      <span>Non arrivato</span>
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <span 
-                                    className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1.5 shrink-0 print:hidden whitespace-nowrap"
-                                    title="Inviato alla portineria · In attesa dello smarcamento del custode"
-                                  >
-                                    <ShieldCheck size={13} className="text-amber-600 shrink-0" />
-                                    <span>In attesa in portineria</span>
-                                  </span>
-                                );
-                              })()}
 
                               {/* Riferimento tra parentesi */}
                               {app.side_note && (
