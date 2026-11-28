@@ -15,6 +15,90 @@ interface ParsedOrderResult {
   suggestedDepartment?: string;
 }
 
+type GeminiParseOutcome =
+  | { kind: 'order'; result: ParsedOrderResult }
+  | { kind: 'ignore'; reason: string }
+  | null;
+
+function getPreFilterIgnoreReason(from: string, subject: string, body: string): string | null {
+  const fromLow = from.toLowerCase();
+  const subjLow = subject.toLowerCase();
+  const sysCheck = `${fromLow} ${subjLow}`;
+  const fullLow = `${fromLow}\n${subjLow}\n${body.slice(0, 4000).toLowerCase()}`;
+
+  // 1. Notifiche di sistema Google / Apps Script / bounce email
+  if (
+    sysCheck.includes('accounts.google.com') ||
+    sysCheck.includes('forwarding-noreply@google.com') ||
+    sysCheck.includes('noreply-apps-scripts-notifications@google.com') ||
+    sysCheck.includes('summary of failures for google apps script') ||
+    sysCheck.includes('avviso di sicurezza') ||
+    sysCheck.includes('security alert') ||
+    sysCheck.includes('conferma inoltro gmail') ||
+    sysCheck.includes('gmail forwarding confirmation') ||
+    sysCheck.includes('mailer-daemon') ||
+    sysCheck.includes('postmaster@')
+  ) {
+    return 'System/Google/Apps Script notification email';
+  }
+
+  // 2. Richieste da moduli contatti / sito web
+  if (
+    subjLow.includes('nuova richiesta da sito web') ||
+    subjLow.includes('nuovo messaggio dal sito') ||
+    subjLow.includes('richiesta informazioni') ||
+    subjLow.includes('modulo di contatto')
+  ) {
+    return 'Website contact form notification';
+  }
+
+  const hasPhysicalParcelSignal =
+    /\b(tracking|corriere|lettera di vettura|ldv|ritiro pacco|pacco in arrivo|in consegna oggi|consegna prevista|brt|bartolini|gls|dhl|sda|ups|fedex)\b/i.test(
+      fullLow
+    );
+
+  // 3. Scontrini o acquisti già ritirati di persona in negozio (senza spedizione)
+  if (
+    (fullLow.includes('acquisto effettuato nel negozio') ||
+      fullLow.includes('scontrino digitale') ||
+      fullLow.includes('ricevuta di acquisto in negozio')) &&
+    !hasPhysicalParcelSignal
+  ) {
+    return 'In-store purchase receipt without delivery';
+  }
+
+  // 4. Viaggi, hotel, newsletter promo senza spedizione fisica
+  if (
+    (fromLow.includes('booking.com') ||
+      fromLow.includes('airbnb') ||
+      fromLow.includes('expedia') ||
+      fromLow.includes('trivago') ||
+      fromLow.includes('ryanair') ||
+      fromLow.includes('trenitalia') ||
+      fromLow.includes('italo') ||
+      subjLow.includes('risparmiare fino al')) &&
+    !hasPhysicalParcelSignal
+  ) {
+    return 'Travel/promo newsletter without physical shipment';
+  }
+
+  // 5. Gestori telefonici, energia, utenze, banche, assicurazioni (bollette/fatture/avvisi senza spedizione pacco)
+  const isUtilityOrBankSender =
+    /\b(tim|vodafone|windtre|wind|fastweb|iliad|postemobile|tiscali|enel|eni\s*plenitude|plenitude|a2a|acea|iren|hera|edison|sorgenia|engie|e\.on|intesa\s*sanpaolo|unicredit|fineco|banca|american\s*express|nexi|agenzia\s*delle\s*entrate|inps|telepass|unipol|generali|allianz)\b/i.test(
+      `${fromLow} ${subjLow}`
+    );
+  const hasUtilityOrBillingTerm =
+    /\b(bolletta|fattura|estratto conto|domiciliazione|sepa|rid\b|utenza|fornitura|offerta|tariffa|piano tariffario|credito residuo|ricarica|scadenza|pagamento|addebito|rinnovo|polizza|sinistro)\b/i.test(
+      fullLow
+    );
+
+  if (isUtilityOrBankSender && hasUtilityOrBillingTerm && !hasPhysicalParcelSignal) {
+    return 'Utility/telecom/bank billing or service email without physical package';
+  }
+
+  return null;
+}
+
 function detectCompanyFromEmail(
   toHeader: string = '',
   subject: string = '',
@@ -54,9 +138,16 @@ function detectCompanyFromEmail(
   return 'Edilizia Veggis Monte Citorio';
 }
 
-function heuristicParseEmail(subject: string, body: string): ParsedOrderResult {
+function heuristicParseEmail(subject: string, body: string, from: string = ''): ParsedOrderResult | null {
   const fullRaw = `${subject}\n${body}`;
   const text = fullRaw.toLowerCase();
+  const hasOrderOrShippingSignal =
+    /\b(ordine|order|spedizione|spedito|in consegna|consegna prevista|pacco|corriere|tracking|lettera di vettura|ritiro|brt|bartolini|gls|dhl|sda|ups|fedex|amazon|buffetti|maury|leroy merlin)\b/i.test(
+      `${from} ${fullRaw}`
+    );
+  if (!hasOrderOrShippingSignal) {
+    return null;
+  }
 
   let supplier = 'Altro';
   if (text.includes('amazon')) supplier = 'Amazon';
@@ -158,12 +249,29 @@ function heuristicParseEmail(subject: string, body: string): ParsedOrderResult {
   };
 }
 
-async function parseWithGemini(subject: string, body: string): Promise<ParsedOrderResult | null> {
+async function parseWithGemini(
+  subject: string,
+  body: string,
+  from: string = ''
+): Promise<GeminiParseOutcome> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
   const todayIso = new Date().toISOString().slice(0, 10);
-  const prompt = `Analizza questa email di conferma ordine o spedizione e restituisci SOLO un JSON valido con questi campi:
+  const prompt = `Sei un filtro e parser per le email in arrivo alla portineria di un palazzo aziendale (consegna pacchi e ordini merce).
+Prima classifica se questa email riguarda davvero un ORDINE DI MERCE FISICA, una SPEDIZIONE o un PACCO IN ARRIVO tramite corriere/fornitore.
+
+Imposta "isOrderOrPackage": false se l'email è invece:
+- una bolletta, fattura utenze, avviso o comunicazione da gestori telefonici, luce, gas, acqua, internet, banche, assicurazioni (es. TIM, Vodafone, WindTre, Fastweb, Enel, Eni, Acea, A2A, banche) che NON riguarda la spedizione fisica di un pacco;
+- una newsletter, email promozionale/pubblicitaria, offerta sconti (es. Booking.com, Black Friday, pubblicità);
+- una notifica di sistema, avviso Google, report errori Apps Script;
+- una richiesta informazioni da sito web / modulo contatti;
+- una ricevuta/scontrino di acquisto già ritirato di persona in negozio senza consegna prevista;
+- qualsiasi altra email che NON comporta la consegna o l'arrivo di un pacco in portineria.
+
+Restituisci SOLO un JSON valido con questi campi:
+- isOrderOrPackage: boolean
+- ignoreReason: stringa breve se isOrderOrPackage è false, altrimenti null
 - supplier: nome fornitore (es. "Amazon", "Maury's", "Buffetti", "Leroy Merlin", "BRT", ecc.)
 - orderNumber: numero ordine se presente (stringa o null)
 - trackingNumber: codice tracking se presente (stringa o null)
@@ -172,6 +280,7 @@ async function parseWithGemini(subject: string, body: string): Promise<ParsedOrd
 - status: uno tra "ORDINATO", "IN_TRANSITO", "IN_CONSEGNA_OGGI", "ARRIVATO_PORTINERIA"
 - suggestedDepartment: proponi solo se molto chiaro uno tra "Amministrazione", "Direzione / AU", "Manutenzione / Veggis", "Pulizie", "Portineria", altrimenti null
 
+Mittente: ${from}
 Oggetto: ${subject}
 Testo email (estratto):
 ${body.slice(0, 9000)}`;
@@ -199,14 +308,23 @@ ${body.slice(0, 9000)}`;
       const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!rawText) continue;
       const parsed = JSON.parse(rawText);
+      if (parsed.isOrderOrPackage === false) {
+        return {
+          kind: 'ignore',
+          reason: parsed.ignoreReason || 'Not an order or physical package email (AI)',
+        };
+      }
       return {
-        supplier: parsed.supplier || 'Altro',
-        orderNumber: parsed.orderNumber || undefined,
-        trackingNumber: parsed.trackingNumber || undefined,
-        itemsSummary: parsed.itemsSummary || subject,
-        expectedDate: parsed.expectedDate || undefined,
-        status: parsed.status || 'ORDINATO',
-        suggestedDepartment: parsed.suggestedDepartment || undefined,
+        kind: 'order',
+        result: {
+          supplier: parsed.supplier || 'Altro',
+          orderNumber: parsed.orderNumber || undefined,
+          trackingNumber: parsed.trackingNumber || undefined,
+          itemsSummary: parsed.itemsSummary || subject,
+          expectedDate: parsed.expectedDate || undefined,
+          status: parsed.status || 'ORDINATO',
+          suggestedDepartment: parsed.suggestedDepartment || undefined,
+        },
       };
     } catch {
       continue;
@@ -257,19 +375,6 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'Missing email subject/body' });
   }
 
-  // Ignora email di sistema Google (avvisi di sicurezza, conferme inoltro Gmail, ecc.)
-  const sysCheck = `${from} ${subject}`.toLowerCase();
-  if (
-    sysCheck.includes('accounts.google.com') ||
-    sysCheck.includes('forwarding-noreply@google.com') ||
-    sysCheck.includes('avviso di sicurezza') ||
-    sysCheck.includes('security alert') ||
-    sysCheck.includes('conferma inoltro gmail') ||
-    sysCheck.includes('gmail forwarding confirmation')
-  ) {
-    return res.status(200).json({ ok: true, ignored: true, reason: 'System/Google notification email' });
-  }
-
   const stripInvisible = (s: string) =>
     String(s || '')
       .replace(/[\u034f\u200b-\u200f\u00ad\ufeff\u2060\u180e]/g, '')
@@ -279,9 +384,25 @@ export default async function handler(req: any, res: any) {
   const cleanSubject = stripInvisible(subject);
   const cleanBody = stripInvisible(body);
 
+  // Ignora email di sistema, gestori telefonici/energia/utenze, newsletter promo, richieste sito web o scontrini in negozio
+  const preFilterReason = getPreFilterIgnoreReason(from, cleanSubject, cleanBody);
+  if (preFilterReason) {
+    return res.status(200).json({ ok: true, ignored: true, reason: preFilterReason });
+  }
+
   const company = detectCompanyFromEmail(to, cleanSubject, cleanBody, labels);
-  const aiParsed = await parseWithGemini(cleanSubject, cleanBody);
-  const parsed = aiParsed || heuristicParseEmail(cleanSubject, cleanBody);
+  const aiOutcome = await parseWithGemini(cleanSubject, cleanBody, from);
+  if (aiOutcome?.kind === 'ignore') {
+    return res.status(200).json({ ok: true, ignored: true, reason: aiOutcome.reason });
+  }
+
+  const parsed = aiOutcome?.kind === 'order'
+    ? aiOutcome.result
+    : heuristicParseEmail(cleanSubject, cleanBody, from);
+
+  if (!parsed) {
+    return res.status(200).json({ ok: true, ignored: true, reason: 'No order or shipping signal detected' });
+  }
 
   const supabase = createClient(PORTINERIA_SUPABASE_URL, PORTINERIA_SUPABASE_KEY);
 
